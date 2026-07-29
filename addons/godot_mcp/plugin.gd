@@ -9,7 +9,6 @@ const AUTOLOADS: Array[Array] = [
 
 var _websocket_client: Node
 var _command_router: Node
-var _injected: Array[String] = []
 var auto_dismiss_dialogs: bool = false
 
 
@@ -54,25 +53,34 @@ func _dismiss_dialogs(node: Node) -> void:
 
 
 func _inject_autoloads() -> void:
-	_injected.clear()
 	var changed := false
 	for entry in AUTOLOADS:
 		var key: String = entry[0]
 		var script: String = entry[1]
 		if not ProjectSettings.has_setting(key):
 			ProjectSettings.set_setting(key, "*" + script)
-			_injected.append(key)
 			changed = true
 	if changed:
 		ProjectSettings.save()
 
 
 func _remove_autoloads() -> void:
+	# T-102: iterate AUTOLOADS, not an in-memory list of what this session
+	# happened to inject. _injected was rebuilt empty on every _enter_tree() and
+	# only appended to when the setting did not already exist, so from the second
+	# editor session onwards it was always empty and _exit_tree() removed nothing.
 	var changed := false
-	for key in _injected:
-		if ProjectSettings.has_setting(key):
-			ProjectSettings.set_setting(key, null)
-			changed = true
-	_injected.clear()
+	for entry in AUTOLOADS:
+		var key: String = entry[0]
+		var script: String = entry[1]
+		if not ProjectSettings.has_setting(key):
+			continue
+		# Ownership check: only remove an entry that still points at this
+		# plugin's own script. A user may legitimately have registered their own
+		# autoload under the same name, and that is not ours to delete.
+		if str(ProjectSettings.get_setting(key)).trim_prefix("*") != script:
+			continue
+		ProjectSettings.set_setting(key, null)
+		changed = true
 	if changed:
 		ProjectSettings.save()
