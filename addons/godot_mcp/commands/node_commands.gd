@@ -244,10 +244,37 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 	var to_node := _resolve_node(to_path)
 	if from_node == null or to_node == null:
 		return _err("Source or target node not found")
-	var err := from_node.connect(signal_name, Callable(to_node, method_name))
+	if not from_node.has_signal(signal_name):
+		return _err("Node %s has no signal '%s'" % [from_node.name, signal_name])
+	var callable := Callable(to_node, method_name)
+	if from_node.is_connected(signal_name, callable):
+		return _err("Already connected: %s.%s -> %s" % [from_node.name, signal_name, method_name])
+
+	# CONNECT_PERSIST is what makes the connection part of the scene rather than
+	# a live object relationship. Without it Godot never writes a [connection]
+	# line into the .tscn, so the connection reported success, showed up in
+	# get_signals, and then vanished on reload.
+	var err := from_node.connect(signal_name, callable, CONNECT_PERSIST)
 	if err != OK:
 		return _err("Connect failed: %d" % err)
-	return _ok({"connected": true})
+
+	# Go through UndoRedo so the change is undoable and, crucially, marks the
+	# scene dirty — otherwise the editor does not know it has anything to save.
+	var undo := editor_plugin.get_undo_redo()
+	undo.create_action("MCP Connect Signal")
+	undo.add_do_method(from_node, "connect", signal_name, callable, CONNECT_PERSIST)
+	undo.add_undo_method(from_node, "disconnect", signal_name, callable)
+	undo.commit_action(false)
+
+	return _ok({
+		"connected": true,
+		"from": str(_edited_root().get_path_to(from_node)) if _edited_root() else from_node.name,
+		"signal": signal_name,
+		"to": str(_edited_root().get_path_to(to_node)) if _edited_root() else to_node.name,
+		"method": method_name,
+		"persistent": true,
+		"note": "Call save_scene to write the [connection] block to disk.",
+	})
 
 
 func _disconnect_signal(params: Dictionary) -> Dictionary:
@@ -259,8 +286,17 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 	var to_node := _resolve_node(to_path)
 	if from_node == null or to_node == null:
 		return _err("Source or target node not found")
-	from_node.disconnect(signal_name, Callable(to_node, method_name))
-	return _ok({"disconnected": true})
+	var callable := Callable(to_node, method_name)
+	if not from_node.is_connected(signal_name, callable):
+		return _err("Not connected: %s.%s -> %s" % [from_node.name, signal_name, method_name])
+
+	var undo := editor_plugin.get_undo_redo()
+	undo.create_action("MCP Disconnect Signal")
+	undo.add_do_method(from_node, "disconnect", signal_name, callable)
+	undo.add_undo_method(from_node, "connect", signal_name, callable, CONNECT_PERSIST)
+	undo.commit_action()
+
+	return _ok({"disconnected": true, "note": "Call save_scene to persist the change."})
 
 
 func _get_node_groups(params: Dictionary) -> Dictionary:
