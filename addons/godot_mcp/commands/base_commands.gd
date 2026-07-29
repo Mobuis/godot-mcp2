@@ -149,10 +149,14 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 		return _err("Failed to write runtime request file", -32012)
 	file.store_string(JSON.stringify({"id": request_id, "action": action, "params": params}))
 	file.close()
-	var elapsed := 0.0
-	while elapsed < timeout_sec:
+	# Measure real time, not iterations. `elapsed += 0.05` assumed each poll took
+	# exactly its nominal 50ms, but the editor throttles its frame rate when idle
+	# and a SceneTreeTimer cannot fire faster than a frame — so a nominal 5s
+	# budget was observed taking ~10s of wall clock. The advertised timeout has
+	# to be the real one.
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)
+	while Time.get_ticks_msec() < deadline:
 		await editor_plugin.get_tree().create_timer(0.05).timeout
-		elapsed += 0.05
 		if FileAccess.file_exists(res_path):
 			var text := FileAccess.get_file_as_string(res_path)
 			var data = JSON.parse_string(text)
@@ -168,7 +172,7 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 			if data.has("error"):
 				return _err(str(data["error"]))
 			return _ok(data.get("result", data))
-	return _err("Runtime request timed out", -32011)
+	return _err("Runtime request timed out after %.1fs: %s" % [timeout_sec, action], -32011)
 
 
 func _queue_input(events: Array) -> void:
@@ -200,10 +204,10 @@ func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dicti
 			if img:
 				img.save_png(res_path)
 				return _screenshot_result(img, res_path, p)
-	var elapsed := 0.0
-	while elapsed < 5.0:
+	# Same real-time deadline as _runtime_call, for the same reason.
+	var deadline := Time.get_ticks_msec() + 5000
+	while Time.get_ticks_msec() < deadline:
 		await editor_plugin.get_tree().create_timer(0.1).timeout
-		elapsed += 0.1
 		if FileAccess.file_exists(res_path):
 			var meta = {}
 			if FileAccess.file_exists(meta_path):
