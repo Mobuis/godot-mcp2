@@ -8,6 +8,8 @@ const TypeParser = preload("res://addons/godot_mcp/utils/type_parser.gd")
 
 var editor_plugin: EditorPlugin
 
+var _request_seq: int = 0
+
 const RUNTIME_REQ := "mcp_runtime_req.json"
 const RUNTIME_RES := "mcp_runtime_res.json"
 const SCREENSHOT_REQ := "mcp_screenshot_req.json"
@@ -57,15 +59,26 @@ func _user_file(name: String) -> String:
 	return OS.get_user_data_dir().path_join(name)
 
 
+## T-206: the file IPC uses one fixed filename per channel, so two concurrent
+## tool calls overwrite each other's request and can read each other's response.
+## Tagging every request lets a caller recognise a response that is not its own.
+## This turns "silently wrong data" into "clean timeout"; it does not make the
+## channel concurrent. The real fix is T-401.
+func _new_request_id() -> String:
+	_request_seq += 1
+	return "%d-%d-%d" % [Time.get_ticks_usec(), _request_seq, randi()]
+
+
 func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float = 5.0) -> Dictionary:
 	if not editor_plugin.get_editor_interface().is_playing_scene():
 		return _err("Game is not running. Use play_scene first.", -32010)
+	var request_id := _new_request_id()
 	var req_path := _user_file(RUNTIME_REQ)
 	var res_path := _user_file(RUNTIME_RES)
 	if FileAccess.file_exists(res_path):
 		DirAccess.remove_absolute(res_path)
 	var file := FileAccess.open(req_path, FileAccess.WRITE)
-	file.store_string(JSON.stringify({"action": action, "params": params}))
+	file.store_string(JSON.stringify({"id": request_id, "action": action, "params": params}))
 	file.close()
 	var elapsed := 0.0
 	while elapsed < timeout_sec:
@@ -73,12 +86,19 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 		elapsed += 0.05
 		if FileAccess.file_exists(res_path):
 			var text := FileAccess.get_file_as_string(res_path)
-			DirAccess.remove_absolute(res_path)
 			var data = JSON.parse_string(text)
-			if data is Dictionary:
-				if data.has("error"):
-					return _err(str(data["error"]))
-				return _ok(data.get("result", data))
+			if not (data is Dictionary):
+				# unparseable — drop it so it cannot block the poll loop
+				DirAccess.remove_absolute(res_path)
+				continue
+			if str(data.get("id", "")) != request_id:
+				# Another call's response. Leave it for its owner and keep
+				# waiting; this request was overwritten and will time out.
+				continue
+			DirAccess.remove_absolute(res_path)
+			if data.has("error"):
+				return _err(str(data["error"]))
+			return _ok(data.get("result", data))
 	return _err("Runtime request timed out", -32011)
 
 
@@ -93,13 +113,14 @@ func _get_input_bridge() -> Node:
 
 
 func _request_screenshot(target: String = "editor") -> Dictionary:
+	var request_id := _new_request_id()
 	var req_path := _user_file(SCREENSHOT_REQ)
 	var res_path := _user_file(SCREENSHOT_RES)
 	var meta_path := _user_file(SCREENSHOT_META)
 	if FileAccess.file_exists(res_path):
 		DirAccess.remove_absolute(res_path)
 	var file := FileAccess.open(req_path, FileAccess.WRITE)
-	file.store_string(JSON.stringify({"target": target}))
+	file.store_string(JSON.stringify({"id": request_id, "target": target}))
 	file.close()
 	if target == "editor":
 		var vp := editor_plugin.get_editor_interface().get_editor_main_screen().get_viewport()
@@ -113,10 +134,13 @@ func _request_screenshot(target: String = "editor") -> Dictionary:
 		await editor_plugin.get_tree().create_timer(0.1).timeout
 		elapsed += 0.1
 		if FileAccess.file_exists(res_path):
-			var img := Image.load_from_file(res_path)
-			var meta := {}
+			var meta = {}
 			if FileAccess.file_exists(meta_path):
 				meta = JSON.parse_string(FileAccess.get_file_as_string(meta_path))
+			# T-206: only accept the capture produced for this request.
+			if not (meta is Dictionary) or str(meta.get("id", "")) != request_id:
+				continue
+			var img := Image.load_from_file(res_path)
 			return _ok({
 				"path": res_path,
 				"width": img.get_width() if img else 0,

@@ -30,7 +30,7 @@ func _check_editor_request() -> void:
 	DirAccess.remove_absolute(req_path)
 	if req is Dictionary and req.get("target") == "game":
 		return
-	_capture_viewport()
+	_capture_viewport(str(req.get("id", "")) if req is Dictionary else "")
 
 
 func _check_game_request() -> void:
@@ -40,10 +40,12 @@ func _check_game_request() -> void:
 	var req := JSON.parse_string(FileAccess.get_file_as_string(req_path))
 	DirAccess.remove_absolute(req_path)
 	if req is Dictionary and req.get("target") == "game":
-		_capture_viewport()
+		_capture_viewport(str(req.get("id", "")))
 
 
-func _capture_viewport() -> void:
+## T-206: request_id is echoed into the meta file so the editor-side caller can
+## reject a capture that belongs to a different request.
+func _capture_viewport(request_id: String = "") -> void:
 	var viewport := get_viewport()
 	if viewport == null:
 		return
@@ -55,7 +57,7 @@ func _capture_viewport() -> void:
 		img.save_png(_user_path(RESPONSE_FILE))
 		var meta := FileAccess.open(_user_path(META_FILE), FileAccess.WRITE)
 		if meta:
-			meta.store_string(JSON.stringify({"width": img.get_width(), "height": img.get_height()}))
+			meta.store_string(JSON.stringify({"id": request_id, "width": img.get_width(), "height": img.get_height()}))
 			meta.close()
 
 

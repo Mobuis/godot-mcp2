@@ -42,6 +42,8 @@ func _process(_delta: float) -> void:
 
 func _handle_request(req: Dictionary) -> void:
 	var result: Dictionary = await _dispatch_async(req)
+	# T-206: echo the caller's id so it can tell its own response from another's.
+	result["id"] = str(req.get("id", ""))
 	_write_response(result)
 	_handling = false
 
