@@ -188,6 +188,13 @@ npm run build
 
 The entry point after build is `server/build/index.js`.
 
+> **`build/` is gitignored, and MCP clients launch `build/index.js` directly.**
+> Nothing forces a rebuild when you edit `server/src/`, so it is easy to spend an
+> afternoon debugging a fix that was never compiled. After any change to
+> `server/src/`, run `npm run build` and restart the MCP server. The server
+> prints a loud `STALE BUILD` banner at startup if `src/` is newer than
+> `build/`, so check its log first when a change appears to have no effect.
+
 ### 3. Configure your AI client
 
 Add the following to your MCP config file (**replace paths with your actual paths**):

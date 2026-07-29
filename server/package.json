@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prestart": "npm run build",
     "start": "node build/index.js",
     "dev": "tsc --watch",
     "test": "vitest run",
