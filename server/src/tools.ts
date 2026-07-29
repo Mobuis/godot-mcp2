@@ -42,7 +42,7 @@ export function registerTools(server: McpServer, bridge: GodotBridge): void {
     const schema = buildSchema(def.params);
     server.tool(def.name, def.description, schema, async (args) => {
       try {
-        const result = await bridge.call(def.method, args as Record<string, unknown>);
+        const result = await bridge.call(def.method, args as Record<string, unknown>, def.timeoutMs);
         return textResult(result);
       } catch (e) {
         return textResult({ error: (e as Error).message }, true);

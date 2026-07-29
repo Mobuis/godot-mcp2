@@ -2,12 +2,20 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const DEFAULT_PORT = 6505;
 const HEARTBEAT_MS = 10_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+// T-203: was 30s, which a headless export or a navmesh bake always exceeds.
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 export class GodotBridge {
@@ -17,9 +25,11 @@ export class GodotBridge {
   private nextId = 1;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   readonly port: number;
+  private readonly timeoutMs: number;
 
   constructor(port = Number(process.env.GODOT_MCP_PORT ?? DEFAULT_PORT)) {
     this.port = port;
+    this.timeoutMs = envInt("GODOT_MCP_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
   }
 
   start(): void {
@@ -69,7 +79,19 @@ export class GodotBridge {
     return this.client?.readyState === WebSocket.OPEN;
   }
 
-  async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  /**
+   * @param toolTimeoutMs T-203: per-tool floor for known-slow tools. The
+   * effective timeout is the larger of this and the configured default, so
+   * raising GODOT_MCP_TIMEOUT_MS never shortens a slow tool.
+   *
+   * Note: on timeout the request is dropped here but Godot keeps executing it.
+   * There is no cancellation channel.
+   */
+  async call(
+    method: string,
+    params: Record<string, unknown> = {},
+    toolTimeoutMs?: number
+  ): Promise<unknown> {
     if (!this.connected || !this.client) {
       throw new Error(
         "Godot editor not connected. Open your project in Godot and enable the Godot MCP plugin."
@@ -78,13 +100,14 @@ export class GodotBridge {
 
     const id = this.nextId++;
     const client = this.client;
+    const timeoutMs = Math.max(this.timeoutMs, toolTimeoutMs ?? 0);
 
     return new Promise((resolve, reject) => {
       // T-205: register before sending, so a response can never outrun the entry.
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Request timeout: ${method}`));
-      }, REQUEST_TIMEOUT_MS);
+        reject(new Error(`Request timeout after ${timeoutMs}ms: ${method}`));
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
 
       try {

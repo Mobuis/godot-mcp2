@@ -11,6 +11,12 @@ export interface ToolDef {
   description: string;
   method: string;
   params?: ToolParamDef[];
+  /**
+   * T-203: minimum request timeout in ms for tools that routinely outrun the
+   * default. Acts as a floor, not a cap — GODOT_MCP_TIMEOUT_MS still wins if
+   * it is larger.
+   */
+  timeoutMs?: number;
 }
 
 export const TOOL_DEFINITIONS: ToolDef[] = [
@@ -193,7 +199,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   // Navigation (6)
   { name: "setup_navigation_region", description: "Configure NavigationRegion", method: "setup_navigation_region", params: [{ name: "parent_path", type: "string" }, { name: "is_3d", type: "boolean" }] },
   { name: "setup_navigation_agent", description: "Configure NavigationAgent", method: "setup_navigation_agent", params: [{ name: "parent_path", type: "string" }, { name: "is_3d", type: "boolean" }, { name: "max_speed", type: "number" }] },
-  { name: "bake_navigation_mesh", description: "Bake navigation mesh", method: "bake_navigation_mesh", params: [{ name: "node_path", type: "string", required: true }] },
+  { name: "bake_navigation_mesh", description: "Bake navigation mesh", method: "bake_navigation_mesh", params: [{ name: "node_path", type: "string", required: true }], timeoutMs: 300_000 },
   { name: "set_navigation_layers", description: "Set navigation layers", method: "set_navigation_layers", params: [{ name: "node_path", type: "string", required: true }, { name: "layers", type: "number" }] },
   { name: "get_navigation_info", description: "Get navigation setup info", method: "get_navigation_info", params: [{ name: "node_path", type: "string", required: true }] },
   { name: "get_navigation_path", description: "Compute path between two points", method: "get_navigation_path", params: [{ name: "from_x", type: "number" }, { name: "from_y", type: "number" }, { name: "to_x", type: "number" }, { name: "to_y", type: "number" }] },
@@ -226,12 +232,12 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "run_test_scenario", description: "Run automated test scenario", method: "run_test_scenario", params: [{ name: "steps", type: "array", required: true }] },
   { name: "assert_node_state", description: "Assert node property values", method: "assert_node_state", params: [{ name: "node_path", type: "string", required: true }, { name: "property", type: "string", required: true }, { name: "expected", type: "string", required: true }] },
   { name: "assert_screen_text", description: "Check for text on screen", method: "assert_screen_text", params: [{ name: "text", type: "string", required: true }] },
-  { name: "run_stress_test", description: "Run performance stress test", method: "run_stress_test", params: [{ name: "duration", type: "number" }] },
+  { name: "run_stress_test", description: "Run performance stress test", method: "run_stress_test", params: [{ name: "duration", type: "number" }], timeoutMs: 300_000 },
   { name: "get_test_report", description: "Get test results report", method: "get_test_report" },
 
   // Android (3)
   { name: "list_android_devices", description: "List connected Android devices via adb", method: "list_android_devices" },
-  { name: "deploy_to_android", description: "Export and deploy APK to device", method: "deploy_to_android", params: [{ name: "preset", type: "string" }, { name: "apk_path", type: "string" }] },
+  { name: "deploy_to_android", description: "Export and deploy APK to device", method: "deploy_to_android", params: [{ name: "preset", type: "string" }, { name: "apk_path", type: "string" }], timeoutMs: 900_000 },
   { name: "get_android_build_info", description: "Get Android export settings", method: "get_android_build_info" },
   { name: "get_android_preset_info", description: "Get detailed Android export preset options", method: "get_android_preset_info", params: [{ name: "preset", type: "string" }] },
 ];
