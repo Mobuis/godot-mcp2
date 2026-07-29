@@ -134,10 +134,6 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "get_theme_info", description: "Get theme overrides info", method: "get_theme_info", params: [{ name: "node_path", type: "string", required: true }] },
   { name: "setup_control", description: "Configure Control anchors, size flags and offsets", method: "setup_control", params: [{ name: "node_path", type: "string", required: true }, { name: "anchor_preset", type: "string" }, { name: "size_flags_horizontal", type: "number" }, { name: "size_flags_vertical", type: "number" }, { name: "text", type: "string" }] },
 
-  // Profiling (2)
-  { name: "get_performance_monitors", description: "All performance monitors", method: "get_performance_monitors" },
-  { name: "get_editor_performance", description: "Quick performance summary", method: "get_editor_performance" },
-
   // Batch/Refactor (8)
   { name: "find_nodes_by_type", description: "Find all nodes of a type", method: "find_nodes_by_type", params: [{ name: "type", type: "string", required: true }] },
   { name: "find_signal_connections", description: "Find all signal connections in scene", method: "find_signal_connections" },
@@ -156,11 +152,6 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "assign_shader_material", description: "Assign ShaderMaterial to node", method: "assign_shader_material", params: [{ name: "node_path", type: "string", required: true }, { name: "shader_path", type: "string", required: true }] },
   { name: "set_shader_param", description: "Set shader parameter", method: "set_shader_param", params: [{ name: "node_path", type: "string", required: true }, { name: "param", type: "string", required: true }, { name: "value", type: "string", required: true }] },
   { name: "get_shader_params", description: "Get all shader parameters", method: "get_shader_params", params: [{ name: "node_path", type: "string", required: true }] },
-
-  // Export (3)
-  { name: "list_export_presets", description: "List export presets", method: "list_export_presets" },
-  { name: "export_project", description: "Get export command for preset", method: "export_project", params: [{ name: "preset", type: "string", required: true }, { name: "path", type: "string", required: true }] },
-  { name: "get_export_info", description: "Export-related project info", method: "get_export_info" },
 
   // Resource (6)
   { name: "read_resource", description: "Read .tres resource properties", method: "read_resource", params: [{ name: "resource_path", type: "string", required: true }] },
@@ -224,17 +215,4 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "analyze_signal_flow", description: "Map signal connections", method: "analyze_signal_flow" },
   { name: "find_unused_resources", description: "Find unreferenced resources", method: "find_unused_resources", params: [{ name: "directory", type: "string" }, { name: "max_results", type: "number" }] },
   { name: "get_project_statistics", description: "Get project-wide statistics", method: "get_project_statistics" },
-
-  // Testing/QA (6)
-  { name: "run_test_scenario", description: "Run automated test scenario", method: "run_test_scenario", params: [{ name: "steps", type: "array", required: true }] },
-  { name: "assert_node_state", description: "Assert node property values", method: "assert_node_state", params: [{ name: "node_path", type: "string", required: true }, { name: "property", type: "string", required: true }, { name: "expected", type: "string", required: true }] },
-  { name: "assert_screen_text", description: "Check for text on screen", method: "assert_screen_text", params: [{ name: "text", type: "string", required: true }] },
-  { name: "run_stress_test", description: "Run performance stress test", method: "run_stress_test", params: [{ name: "duration", type: "number" }], timeoutMs: 300_000 },
-  { name: "get_test_report", description: "Get test results report", method: "get_test_report" },
-
-  // Android (3)
-  { name: "list_android_devices", description: "List connected Android devices via adb", method: "list_android_devices" },
-  { name: "deploy_to_android", description: "Export and deploy APK to device", method: "deploy_to_android", params: [{ name: "preset", type: "string" }, { name: "apk_path", type: "string" }], timeoutMs: 900_000 },
-  { name: "get_android_build_info", description: "Get Android export settings", method: "get_android_build_info" },
-  { name: "get_android_preset_info", description: "Get detailed Android export preset options", method: "get_android_preset_info", params: [{ name: "preset", type: "string" }] },
 ];

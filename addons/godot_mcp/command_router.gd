@@ -15,10 +15,8 @@ const COMMAND_MODULES := [
 	"res://addons/godot_mcp/commands/animation_commands.gd",
 	"res://addons/godot_mcp/commands/tilemap_commands.gd",
 	"res://addons/godot_mcp/commands/theme_commands.gd",
-	"res://addons/godot_mcp/commands/profiling_commands.gd",
 	"res://addons/godot_mcp/commands/batch_commands.gd",
 	"res://addons/godot_mcp/commands/shader_commands.gd",
-	"res://addons/godot_mcp/commands/export_commands.gd",
 	"res://addons/godot_mcp/commands/resource_commands.gd",
 	"res://addons/godot_mcp/commands/physics_commands.gd",
 	"res://addons/godot_mcp/commands/scene_3d_commands.gd",
@@ -27,8 +25,6 @@ const COMMAND_MODULES := [
 	"res://addons/godot_mcp/commands/audio_commands.gd",
 	"res://addons/godot_mcp/commands/animation_tree_commands.gd",
 	"res://addons/godot_mcp/commands/analysis_commands.gd",
-	"res://addons/godot_mcp/commands/test_commands.gd",
-	"res://addons/godot_mcp/commands/android_commands.gd",
 ]
 
 func _ready() -> void:
