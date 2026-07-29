@@ -1,0 +1,65 @@
+name: CI
+
+# This workflow is the agent's oracle. The token used by any autonomous agent
+# MUST NOT have the `workflows` permission, so this file cannot be modified to
+# make failures disappear. See AUTONOMOUS-RUN.md §4.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npx vitest run --reporter=verbose
+      - name: Build
+        run: npm run build
+
+  gdscript:
+    name: GDScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Scony/godot-gdscript-toolkit@master
+
+      - name: Parse (syntax)
+        run: find addons -name '*.gd' -print0 | xargs -0 gdparse
+
+      - name: Lint
+        # Non-blocking initially: upstream code has pre-existing style issues.
+        # Flip `|| true` off once the codebase is clean.
+        run: gdlint addons/ || true
+
+  invariants:
+    name: Security invariants & parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Manifest / handler parity
+        run: node server/scripts/check-parity.mjs
+
+      - name: Security invariants
+        run: node server/scripts/check-invariants.mjs
