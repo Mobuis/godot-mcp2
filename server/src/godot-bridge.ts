@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 
 const DEFAULT_PORT = 6505;
-const HEARTBEAT_MS = 10_000;
+const DEFAULT_HEARTBEAT_MS = 10_000;
 // T-203: was 30s, which a headless export or a navmesh bake always exceeds.
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -24,12 +24,16 @@ export class GodotBridge {
   private pending = new Map<number, PendingRequest>();
   private nextId = 1;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private isAlive = false;
+
   readonly port: number;
   private readonly timeoutMs: number;
+  private readonly heartbeatMs: number;
 
   constructor(port = Number(process.env.GODOT_MCP_PORT ?? DEFAULT_PORT)) {
     this.port = port;
     this.timeoutMs = envInt("GODOT_MCP_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
+    this.heartbeatMs = envInt("GODOT_MCP_HEARTBEAT_MS", DEFAULT_HEARTBEAT_MS);
   }
 
   start(): void {
@@ -52,6 +56,7 @@ export class GodotBridge {
 
     this.wss.on("connection", (ws) => {
       this.client = ws;
+      this.isAlive = true;
       console.error(`[godot-mcp] Godot editor connected on port ${this.port}`);
 
       ws.on("message", (data) => this.onMessage(data.toString()));
@@ -66,11 +71,24 @@ export class GodotBridge {
       ws.on("error", () => ws.close());
     });
 
+    // T-204: ping/pong as liveness detection, not just keepalive.
     this.heartbeatTimer = setInterval(() => {
-      if (this.client?.readyState === WebSocket.OPEN) {
-        this.client.send(JSON.stringify({ jsonrpc: "2.0", method: "ping", params: {} }));
+      const ws = this.client;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      if (!this.isAlive) {
+        console.error("[godot-mcp] peer missed heartbeat; terminating");
+        ws.terminate();
+        if (this.client === ws) {
+          this.client = null;
+          this.rejectAll(new Error("Godot editor stopped responding"));
+        }
+        return;
       }
-    }, HEARTBEAT_MS);
+
+      this.isAlive = false;
+      ws.send(JSON.stringify({ jsonrpc: "2.0", method: "ping", params: {} }));
+    }, this.heartbeatMs);
 
     console.error(`[godot-mcp] WebSocket server listening on ws://127.0.0.1:${this.port}`);
   }
@@ -146,7 +164,9 @@ export class GodotBridge {
       return;
     }
 
-    if (msg.method === "pong") return;
+    // T-204: any traffic proves liveness
+    this.isAlive = true;
+    if (msg.method === "pong" || msg.method === "ping") return;
 
     if (msg.id !== undefined) {
       const pending = this.pending.get(msg.id);
