@@ -12,6 +12,15 @@ var _is_recording := false
 var _handling := false
 
 
+func _ready() -> void:
+	# T-101: this is an autoload injected into project.godot, so it would
+	# otherwise ship in exported games. The "editor" feature tag is present when
+	# running from the editor, including play-from-editor, and absent in every
+	# export — debug or release. A debug-build check would not be enough.
+	if not OS.has_feature("editor"):
+		queue_free()
+
+
 func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return

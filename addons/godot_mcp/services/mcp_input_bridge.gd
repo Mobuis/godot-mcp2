@@ -4,6 +4,15 @@ extends Node
 const QUEUE_FILE := "mcp_input_queue.json"
 
 
+func _ready() -> void:
+	# T-101: this is an autoload injected into project.godot, so it would
+	# otherwise ship in exported games. The "editor" feature tag is present when
+	# running from the editor, including play-from-editor, and absent in every
+	# export — debug or release. A debug-build check would not be enough.
+	if not OS.has_feature("editor"):
+		queue_free()
+
+
 func queue_events(events: Array) -> void:
 	var path := OS.get_user_data_dir().path_join(QUEUE_FILE)
 	var existing: Array = []
