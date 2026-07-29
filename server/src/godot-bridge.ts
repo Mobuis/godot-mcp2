@@ -3,8 +3,16 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const DEFAULT_PORT = 6505;
 const DEFAULT_HEARTBEAT_MS = 10_000;
-// T-203: was 30s, which a headless export or a navmesh bake always exceeds.
-const DEFAULT_TIMEOUT_MS = 120_000;
+// T-203: was 30s, which is too tight for a navmesh bake. It was then raised to
+// 120s, which was worse: MCP clients default to a 60s request timeout, so the
+// client always gave up first and this timeout never fired. The server's error
+// names the method and the limit; the client's generic one does not, so the
+// server must lose the race by design. 45s is the largest round number that
+// still beats a 60s client.
+//
+// Anything above the client's own timeout — including the per-tool floors in
+// tool-manifest.ts — only takes effect if that client timeout is raised too.
+const DEFAULT_TIMEOUT_MS = 45_000;
 
 interface PendingRequest {
   resolve: (value: unknown) => void;

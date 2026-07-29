@@ -220,10 +220,17 @@ See also [`.mcp.json.example`](.mcp.json.example) in the repo.
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `GODOT_MCP_PORT` | `6505` | Port for the loopback WebSocket server |
-| `GODOT_MCP_TIMEOUT_MS` | `120000` | Per-request timeout. A few known-slow tools (e.g. `bake_navigation_mesh`) declare a higher floor in `tool-manifest.ts`; the effective timeout is the larger of the two, so raising this never shortens them |
+| `GODOT_MCP_TIMEOUT_MS` | `45000` | Per-request timeout. A few known-slow tools (e.g. `bake_navigation_mesh`) declare a higher floor in `tool-manifest.ts`; the effective timeout is the larger of the two, so raising this never shortens them |
 | `GODOT_MCP_HEARTBEAT_MS` | `10000` | Ping interval. A peer that answers nothing for a full interval is terminated |
 
 Non-positive or non-numeric values fall back to the default.
+
+> **Your MCP client's own request timeout is the real ceiling.** Most default to
+> 60s. `GODOT_MCP_TIMEOUT_MS` is deliberately set below that so the server loses
+> the race and you get an error naming the method and the limit, instead of the
+> client's generic "request timed out". If you raise the server timeout — or you
+> want the per-tool floors on slow tools to actually take effect — raise the
+> client's timeout to match, or nothing above 60s will ever fire.
 
 The WebSocket server binds to `127.0.0.1` and rejects any handshake carrying an
 `Origin` header, which is what keeps a web page in your browser from connecting
