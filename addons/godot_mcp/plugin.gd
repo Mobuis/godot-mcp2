@@ -27,13 +27,33 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
-	_remove_autoloads()
+	# Deliberately does NOT remove the autoloads. _exit_tree() fires on editor
+	# shutdown as well as on disable, so removing here rewrote project.godot on
+	# every quit and _enter_tree() put the entries straight back on every launch
+	# — a phantom diff appearing and disappearing for anyone tracking the file in
+	# git. Removal belongs in _disable_plugin(), which fires only on an explicit
+	# disable.
 	if _websocket_client:
 		_websocket_client.stop()
 		_websocket_client.queue_free()
 	if _command_router:
 		_command_router.queue_free()
 	print("[Godot MCP] Plugin stopped")
+
+
+## Called by the engine only when the user enables the plugin in Project
+## Settings — not on editor startup. _enter_tree() still injects as well, so a
+## project whose autoload entries have been lost or hand-removed heals itself on
+## the next launch.
+func _enable_plugin() -> void:
+	_inject_autoloads()
+
+
+## Called by the engine only when the user disables the plugin in Project
+## Settings — not on editor shutdown. This is the counterpart that makes the
+## T-102 fix hold without rewriting project.godot every session.
+func _disable_plugin() -> void:
+	_remove_autoloads()
 
 
 func _inject_autoloads() -> void:
