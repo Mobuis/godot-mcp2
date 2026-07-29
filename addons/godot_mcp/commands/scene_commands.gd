@@ -119,6 +119,18 @@ func _delete_scene(params: Dictionary) -> Dictionary:
 	var abs_path := ProjectSettings.globalize_path(scene_path)
 	if not _is_inside_project(abs_path):
 		return _err("Refusing to delete outside the project directory: %s" % scene_path)
+
+	# Deleting a scene the editor still has open leaves it holding an in-memory
+	# copy that can be written back to disk, so the file reappears and the delete
+	# silently does not stick. Godot exposes no API to close a scene tab, so
+	# refuse and say what to do — a delete that quietly undoes itself is worse
+	# than one that declines.
+	if scene_path in editor_plugin.get_editor_interface().get_open_scenes():
+		return _err(
+			"Scene is open in the editor: %s. Close its tab first — deleting it now would leave the editor holding a copy that can be written back to disk." % scene_path,
+			-32003
+		)
+
 	var err := DirAccess.remove_absolute(abs_path)
 	if err != OK:
 		return _err("Failed to delete scene")
