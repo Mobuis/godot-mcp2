@@ -29,7 +29,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "uid_to_project_path", description: "UID to res:// conversion", method: "uid_to_project_path", params: [{ name: "uid", type: "string", required: true }] },
   { name: "project_path_to_uid", description: "res:// to UID conversion", method: "project_path_to_uid", params: [{ name: "path", type: "string", required: true }] },
 
-  // Scene (9)
+  // Scene (10)
   { name: "get_scene_tree", description: "Live scene tree with hierarchy", method: "get_scene_tree" },
   { name: "get_scene_file_content", description: "Raw .tscn file content", method: "get_scene_file_content", params: [{ name: "scene_path", type: "string" }] },
   { name: "create_scene", description: "Create new scene files", method: "create_scene", params: [{ name: "scene_path", type: "string", required: true }, { name: "root_type", type: "string" }, { name: "overwrite", type: "boolean" }] },
@@ -67,7 +67,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "validate_script", description: "Validate GDScript syntax", method: "validate_script", params: [{ name: "script_path", type: "string" }, { name: "content", type: "string" }] },
   { name: "search_in_files", description: "Search content in project files", method: "search_in_files", params: [{ name: "query", type: "string", required: true }, { name: "directory", type: "string" }, { name: "max_results", type: "number" }] },
 
-  // Editor (9)
+  // Editor (11)
   { name: "get_editor_errors", description: "Get errors and stack traces", method: "get_editor_errors" },
   { name: "get_editor_screenshot", description: "Capture editor viewport", method: "get_editor_screenshot" },
   { name: "get_game_screenshot", description: "Capture running game", method: "get_game_screenshot" },
@@ -89,7 +89,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "get_input_actions", description: "List all input actions", method: "get_input_actions" },
   { name: "set_input_action", description: "Create/modify input action", method: "set_input_action", params: [{ name: "action", type: "string", required: true }, { name: "keycode", type: "number" }] },
 
-  // Runtime (19)
+  // Runtime (18)
   { name: "get_game_scene_tree", description: "Scene tree of running game", method: "get_game_scene_tree" },
   { name: "get_game_node_properties", description: "Node properties in running game", method: "get_game_node_properties", params: [{ name: "node_path", type: "string", required: true }] },
   { name: "set_game_node_property", description: "Set node property in running game", method: "set_game_node_property", params: [{ name: "node_path", type: "string", required: true }, { name: "property", type: "string", required: true }, { name: "value", type: "string", required: true }] },
@@ -125,7 +125,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "tilemap_get_info", description: "TileMapLayer info and tile set sources", method: "tilemap_get_info", params: [{ name: "node_path", type: "string", required: true }] },
   { name: "tilemap_get_used_cells", description: "List of used cells", method: "tilemap_get_used_cells", params: [{ name: "node_path", type: "string", required: true }] },
 
-  // Theme/UI (6)
+  // Theme/UI (7)
   { name: "create_theme", description: "Create Theme resource file", method: "create_theme", params: [{ name: "theme_path", type: "string" }] },
   { name: "set_theme_color", description: "Set theme color override", method: "set_theme_color", params: [{ name: "node_path", type: "string", required: true }, { name: "name", type: "string" }, { name: "color", type: "string" }] },
   { name: "set_theme_constant", description: "Set theme constant override", method: "set_theme_constant", params: [{ name: "node_path", type: "string", required: true }, { name: "name", type: "string" }, { name: "value", type: "number" }] },
@@ -134,7 +134,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "get_theme_info", description: "Get theme overrides info", method: "get_theme_info", params: [{ name: "node_path", type: "string", required: true }] },
   { name: "setup_control", description: "Configure Control anchors, size flags and offsets", method: "setup_control", params: [{ name: "node_path", type: "string", required: true }, { name: "anchor_preset", type: "string" }, { name: "size_flags_horizontal", type: "number" }, { name: "size_flags_vertical", type: "number" }, { name: "text", type: "string" }] },
 
-  // Batch/Refactor (8)
+  // Batch/Refactor (9)
   { name: "find_nodes_by_type", description: "Find all nodes of a type", method: "find_nodes_by_type", params: [{ name: "type", type: "string", required: true }] },
   { name: "find_signal_connections", description: "Find all signal connections in scene", method: "find_signal_connections" },
   { name: "batch_set_property", description: "Set property on all nodes of a type", method: "batch_set_property", params: [{ name: "type", type: "string", required: true }, { name: "property", type: "string", required: true }, { name: "value", type: "string", required: true }] },
