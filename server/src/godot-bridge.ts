@@ -46,11 +46,12 @@ export class GodotBridge {
 
       ws.on("message", (data) => this.onMessage(data.toString()));
       ws.on("close", () => {
+        // T-201: only the *active* client's departure invalidates pending work.
         if (this.client === ws) {
           this.client = null;
           console.error("[godot-mcp] Godot editor disconnected");
+          this.rejectAll(new Error("Godot editor disconnected"));
         }
-        this.rejectAll(new Error("Godot editor disconnected"));
       });
       ws.on("error", () => ws.close());
     });
