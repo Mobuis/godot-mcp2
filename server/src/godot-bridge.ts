@@ -77,15 +77,23 @@ export class GodotBridge {
     }
 
     const id = this.nextId++;
-    const message = JSON.stringify({ jsonrpc: "2.0", id, method, params });
-    this.client.send(message);
+    const client = this.client;
 
     return new Promise((resolve, reject) => {
+      // T-205: register before sending, so a response can never outrun the entry.
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Request timeout: ${method}`));
       }, REQUEST_TIMEOUT_MS);
       this.pending.set(id, { resolve, reject, timer });
+
+      try {
+        client.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+      } catch (e) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(e as Error);
+      }
     });
   }
 
