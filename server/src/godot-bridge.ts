@@ -26,6 +26,20 @@ export class GodotBridge {
     if (this.wss) return;
 
     this.wss = new WebSocketServer({ port: this.port, host: "127.0.0.1" });
+
+    // T-202: EADDRINUSE and friends must not be fatal.
+    this.wss.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        console.error(
+          `[godot-mcp] port ${this.port} is already in use. Another MCP server or Godot ` +
+            `instance is probably running. Set GODOT_MCP_PORT to use a different port.`
+        );
+      } else {
+        console.error("[godot-mcp] websocket server error:", err.message);
+      }
+      this.wss = null;
+    });
+
     this.wss.on("connection", (ws) => {
       this.client = ws;
       console.error(`[godot-mcp] Godot editor connected on port ${this.port}`);
