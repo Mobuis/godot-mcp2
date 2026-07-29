@@ -2,9 +2,13 @@
 extends RefCounted
 class_name MCPResourceUtils
 
+## Normalises a caller-supplied path to a res:// path.
+## Returns "" for anything that is empty or contains a parent-directory
+## component — several call sites globalize the result, which would otherwise
+## escape the project sandbox. Callers must treat "" as a rejected path.
 static func normalize_res(path: String) -> String:
-	if path.is_empty():
-		return path
+	if path.is_empty() or ".." in path:
+		return ""
 	if path.begins_with("res://"):
 		return path
 	return "res://" + path.trim_prefix("/")

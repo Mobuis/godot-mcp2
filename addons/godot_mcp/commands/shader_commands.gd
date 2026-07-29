@@ -14,6 +14,8 @@ func get_commands() -> Dictionary:
 
 func _create_shader(p: Dictionary) -> Dictionary:
 	var path := _norm_res(p.get("shader_path", "res://shader.gdshader"))
+	if path.is_empty():
+		return _err("Rejected 'shader_path'")
 	var shader_type: String = p.get("type", "spatial")
 	var template := "shader_type %s;\n\nvoid fragment() {\n\tCOLOR = vec4(1.0);\n}\n" % shader_type
 	if ResourceUtils.write_text(path, p.get("content", template)) != OK:
@@ -23,11 +25,15 @@ func _create_shader(p: Dictionary) -> Dictionary:
 
 func _read_shader(p: Dictionary) -> Dictionary:
 	var path := _norm_res(p.get("shader_path", ""))
+	if path.is_empty():
+		return _err("Missing or rejected 'shader_path'")
 	return _ok({"content": ResourceUtils.read_text(path)})
 
 
 func _edit_shader(p: Dictionary) -> Dictionary:
 	var path := _norm_res(p.get("shader_path", ""))
+	if path.is_empty():
+		return _err("Missing or rejected 'shader_path'")
 	var content: String = p.get("content", "")
 	if content.is_empty():
 		var existing := ResourceUtils.read_text(path)

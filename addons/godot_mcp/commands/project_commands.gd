@@ -37,8 +37,9 @@ func _search_files(params: Dictionary) -> Dictionary:
 	var recursive: bool = params.get("recursive", true)
 	var max_results: int = int(params.get("max_results", 100))
 
-	if not directory.begins_with("res://"):
-		directory = "res://" + directory.trim_prefix("/")
+	directory = _norm_res(directory)
+	if directory.is_empty():
+		return _err("Rejected 'directory'")
 
 	var results: Array = []
 	_collect_files(directory, pattern, recursive, results, max_results)
@@ -96,8 +97,9 @@ func _match_pattern(file_name: String, pattern: String) -> bool:
 func _get_filesystem_tree(params: Dictionary) -> Dictionary:
 	var directory: String = params.get("directory", "res://")
 	var max_depth: int = int(params.get("max_depth", 4))
-	if not directory.begins_with("res://"):
-		directory = "res://" + directory.trim_prefix("/")
+	directory = _norm_res(directory)
+	if directory.is_empty():
+		return _err("Rejected 'directory'")
 	return _ok({"tree": _build_tree(directory, 0, max_depth)})
 
 

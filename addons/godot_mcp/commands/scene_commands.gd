@@ -34,19 +34,18 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 		if root == null:
 			return _err("No scene open and no scene_path provided")
 		scene_path = root.scene_file_path
-	if not scene_path.begins_with("res://"):
-		scene_path = "res://" + scene_path.trim_prefix("/")
+	scene_path = _norm_res(scene_path)
+	if scene_path.is_empty():
+		return _err("Missing or rejected 'scene_path'")
 	if not FileAccess.file_exists(scene_path):
 		return _err("Scene file not found: %s" % scene_path, -32001)
 	return _ok({"scene_path": scene_path, "content": FileAccess.get_file_as_string(scene_path)})
 
 
 func _open_scene(params: Dictionary) -> Dictionary:
-	var scene_path: String = params.get("scene_path", "")
+	var scene_path := _norm_res(params.get("scene_path", ""))
 	if scene_path.is_empty():
-		return _err("Missing 'scene_path'")
-	if not scene_path.begins_with("res://"):
-		scene_path = "res://" + scene_path.trim_prefix("/")
+		return _err("Missing or rejected 'scene_path'")
 	if not FileAccess.file_exists(scene_path):
 		return _err("Scene file not found: %s" % scene_path, -32001)
 	editor_plugin.get_editor_interface().open_scene_from_path(scene_path)
@@ -65,12 +64,10 @@ func _save_scene(_params: Dictionary) -> Dictionary:
 
 
 func _create_scene(params: Dictionary) -> Dictionary:
-	var scene_path: String = params.get("scene_path", "")
+	var scene_path := _norm_res(params.get("scene_path", ""))
 	var root_type: String = params.get("root_type", "Node2D")
 	if scene_path.is_empty():
-		return _err("Missing 'scene_path'")
-	if not scene_path.begins_with("res://"):
-		scene_path = "res://" + scene_path.trim_prefix("/")
+		return _err("Missing or rejected 'scene_path'")
 	if FileAccess.file_exists(scene_path) and not params.get("overwrite", false):
 		return _err("Scene already exists: %s" % scene_path, -32002, {"suggestion": "Set overwrite=true to replace"})
 
@@ -97,11 +94,9 @@ func _play_scene(params: Dictionary) -> Dictionary:
 		"current":
 			editor_plugin.get_editor_interface().play_current_scene()
 		_:
-			var scene_path: String = params.get("scene_path", "")
+			var scene_path := _norm_res(params.get("scene_path", ""))
 			if scene_path.is_empty():
-				return _err("Custom play mode requires scene_path")
-			if not scene_path.begins_with("res://"):
-				scene_path = "res://" + scene_path.trim_prefix("/")
+				return _err("Custom play mode requires a valid scene_path")
 			editor_plugin.get_editor_interface().play_custom_scene(scene_path)
 	return _ok({"playing": true, "mode": mode})
 

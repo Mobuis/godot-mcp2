@@ -137,6 +137,9 @@ func _deploy_to_android(p: Dictionary) -> Dictionary:
 
 
 func _globalize_apk_path(path: String) -> String:
+	# T-104: this globalizes a caller-supplied path, so it must not accept "..".
+	if ".." in path:
+		return ""
 	if path.begins_with("res://"):
 		return ProjectSettings.globalize_path(path)
 	if not path.begins_with("/") and not path.contains(":"):
