@@ -9,7 +9,6 @@ const AUTOLOADS: Array[Array] = [
 
 var _websocket_client: Node
 var _command_router: Node
-var auto_dismiss_dialogs: bool = false
 
 
 func _enter_tree() -> void:
@@ -35,21 +34,6 @@ func _exit_tree() -> void:
 	if _command_router:
 		_command_router.queue_free()
 	print("[Godot MCP] Plugin stopped")
-
-
-func _process(_delta: float) -> void:
-	if not auto_dismiss_dialogs:
-		return
-	var base_control := get_editor_interface().get_base_control()
-	if base_control:
-		_dismiss_dialogs(base_control)
-
-
-func _dismiss_dialogs(node: Node) -> void:
-	if node is AcceptDialog and node.visible:
-		node.hide()
-	for child in node.get_children():
-		_dismiss_dialogs(child)
 
 
 func _inject_autoloads() -> void:

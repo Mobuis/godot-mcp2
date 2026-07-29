@@ -78,7 +78,6 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "get_output_log", description: "Get output panel content", method: "get_output_log", params: [{ name: "max_lines", type: "number" }] },
   { name: "get_editor_camera", description: "Get 3D editor viewport camera transform", method: "get_editor_camera" },
   { name: "set_editor_camera", description: "Set 3D editor viewport camera transform", method: "set_editor_camera", params: [{ name: "viewport_index", type: "number" }, { name: "x", type: "number" }, { name: "y", type: "number" }, { name: "z", type: "number" }, { name: "rotation_x", type: "number" }, { name: "rotation_y", type: "number" }, { name: "rotation_z", type: "number" }] },
-  { name: "set_auto_dismiss", description: "Auto-dismiss editor dialog popups", method: "set_auto_dismiss", params: [{ name: "enabled", type: "boolean" }] },
   { name: "compare_screenshots", description: "Compare two screenshot images", method: "compare_screenshots", params: [{ name: "path_a", type: "string", required: true }, { name: "path_b", type: "string", required: true }] },
 
   // Input (7)

@@ -16,7 +16,6 @@ func get_commands() -> Dictionary:
 		"reload_project": _reload_project,
 		"get_editor_camera": _get_editor_camera,
 		"set_editor_camera": _set_editor_camera,
-		"set_auto_dismiss": _set_auto_dismiss,
 		"compare_screenshots": _compare_screenshots,
 	}
 
@@ -132,13 +131,6 @@ func _set_editor_camera(params: Dictionary) -> Dictionary:
 	var xform := Transform3D(Basis.from_euler(rot), pos)
 	vp.set_camera_transform(xform)
 	return _ok({"viewport_index": idx, "position": _serialize_value(pos), "rotation": _serialize_value(rot)})
-
-
-func _set_auto_dismiss(params: Dictionary) -> Dictionary:
-	if "auto_dismiss_dialogs" in editor_plugin:
-		editor_plugin.auto_dismiss_dialogs = params.get("enabled", true)
-		return _ok({"auto_dismiss_dialogs": editor_plugin.auto_dismiss_dialogs})
-	return _err("Plugin does not support auto dismiss")
 
 
 func _compare_screenshots(p: Dictionary) -> Dictionary:
