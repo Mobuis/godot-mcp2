@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 
 const DEFAULT_PORT = 6505;
@@ -39,7 +40,20 @@ export class GodotBridge {
   start(): void {
     if (this.wss) return;
 
-    this.wss = new WebSocketServer({ port: this.port, host: "127.0.0.1" });
+    this.wss = new WebSocketServer({
+      port: this.port,
+      host: "127.0.0.1",
+      // T-103: browsers always send Origin on a WS handshake; Godot's
+      // WebSocketPeer does not. Rejecting any handshake bearing an Origin
+      // blocks drive-by connections from a web page on the same machine.
+      verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
+        if (info.origin) {
+          console.error("[godot-mcp] rejected connection with Origin header:", info.origin);
+          return false;
+        }
+        return true;
+      },
+    });
 
     // T-202: EADDRINUSE and friends must not be fatal.
     this.wss.on("error", (err: NodeJS.ErrnoException) => {
@@ -55,6 +69,15 @@ export class GodotBridge {
     });
 
     this.wss.on("connection", (ws) => {
+      // T-103: do not let a newcomer displace a healthy existing client.
+      // Last-write-wins let anything that could complete a handshake take over
+      // the channel and feed forged tool results back to the agent.
+      if (this.client && this.client.readyState === WebSocket.OPEN) {
+        console.error("[godot-mcp] refusing second connection; a client is already attached");
+        ws.close(1013, "Bridge already has an active client");
+        return;
+      }
+
       this.client = ws;
       this.isAlive = true;
       console.error(`[godot-mcp] Godot editor connected on port ${this.port}`);
