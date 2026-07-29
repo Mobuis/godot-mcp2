@@ -41,6 +41,58 @@ func _norm_res(path: String) -> String:
 	return ResourceUtils.normalize_res(path)
 
 
+## Longest-edge default for returned screenshots.
+##
+## A raw HiDPI editor capture is ~3024x1898, which base64-encodes to ~1.3M
+## characters and is rejected outright by the MCP client for exceeding its token
+## limit — the tool "worked" and was unusable. 1568 is the longest edge that
+## still reads clearly while keeping the payload manageable.
+const SCREENSHOT_MAX_EDGE := 1568
+
+
+## Shrinks an image so its longest edge is at most max_edge. Never upscales.
+func _downscale_image(img: Image, max_edge: int) -> Image:
+	if max_edge <= 0:
+		return img
+	var longest := maxi(img.get_width(), img.get_height())
+	if longest <= max_edge:
+		return img
+	var scale := float(max_edge) / float(longest)
+	var out := img.duplicate() as Image
+	out.resize(
+		maxi(1, int(round(img.get_width() * scale))),
+		maxi(1, int(round(img.get_height() * scale))),
+		Image.INTERPOLATE_BILINEAR
+	)
+	return out
+
+
+## Builds a screenshot result. The PNG on disk is always full resolution; only
+## the returned base64 is downscaled, so compare_screenshots and anything else
+## reading the file still sees the real capture.
+func _screenshot_result(img: Image, path: String, p: Dictionary, extra: Dictionary = {}) -> Dictionary:
+	var result := {
+		"path": path,
+		"width": img.get_width(),
+		"height": img.get_height(),
+	}
+	for k in extra:
+		result[k] = extra[k]
+
+	if not bool(p.get("include_base64", true)):
+		result["base64_omitted"] = "include_base64 was false; read the file at 'path'"
+		return _ok(result)
+
+	var max_edge := int(p.get("max_edge", SCREENSHOT_MAX_EDGE))
+	var encoded := _downscale_image(img, max_edge)
+	result["base64"] = Marshalls.raw_to_base64(encoded.save_png_to_buffer())
+	if encoded.get_width() != img.get_width():
+		result["base64_width"] = encoded.get_width()
+		result["base64_height"] = encoded.get_height()
+		result["downscaled"] = true
+	return _ok(result)
+
+
 ## Builds the error for a path parameter that _norm_res() refused.
 ##
 ## "you did not supply this" and "you supplied something the guard rejected" are
@@ -129,7 +181,7 @@ func _get_input_bridge() -> Node:
 	return get_node_or_null("/root/MCPInputBridge")
 
 
-func _request_screenshot(target: String = "editor") -> Dictionary:
+func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dictionary:
 	var request_id := _new_request_id()
 	var req_path := _user_file(SCREENSHOT_REQ)
 	var res_path := _user_file(SCREENSHOT_RES)
@@ -147,7 +199,7 @@ func _request_screenshot(target: String = "editor") -> Dictionary:
 			var img := vp.get_texture().get_image()
 			if img:
 				img.save_png(res_path)
-				return _ok({"path": res_path, "width": img.get_width(), "height": img.get_height(), "base64": Marshalls.raw_to_base64(img.save_png_to_buffer())})
+				return _screenshot_result(img, res_path, p)
 	var elapsed := 0.0
 	while elapsed < 5.0:
 		await editor_plugin.get_tree().create_timer(0.1).timeout
@@ -160,13 +212,9 @@ func _request_screenshot(target: String = "editor") -> Dictionary:
 			if not (meta is Dictionary) or str(meta.get("id", "")) != request_id:
 				continue
 			var img := Image.load_from_file(res_path)
-			return _ok({
-				"path": res_path,
-				"width": img.get_width() if img else 0,
-				"height": img.get_height() if img else 0,
-				"base64": Marshalls.raw_to_base64(img.save_png_to_buffer()) if img else "",
-				"meta": meta,
-			})
+			if img == null:
+				return _err("Screenshot file could not be read: %s" % res_path)
+			return _screenshot_result(img, res_path, p, {"meta": meta})
 	return _err("Screenshot capture failed")
 
 

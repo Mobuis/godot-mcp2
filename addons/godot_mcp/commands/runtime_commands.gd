@@ -42,9 +42,14 @@ func _set_game_node_property(p: Dictionary) -> Dictionary:
 
 func _capture_frames(p: Dictionary) -> Dictionary:
 	var count: int = int(p.get("count", 3))
+	# N inline images blow the client's token limit even downscaled, so this tool
+	# returns paths only unless the caller explicitly asks for image data.
+	var shot_params := p.duplicate()
+	if not shot_params.has("include_base64"):
+		shot_params["include_base64"] = false
 	var frames: Array = []
 	for i in count:
-		var shot := await _request_screenshot("game")
+		var shot := await _request_screenshot("game", shot_params)
 		frames.append(shot.get("result", shot))
 		await editor_plugin.get_tree().create_timer(0.1).timeout
 	return _ok({"frames": frames})

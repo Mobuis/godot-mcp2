@@ -65,12 +65,12 @@ func _get_open_scripts(_params: Dictionary) -> Dictionary:
 	return _ok({"scripts": scripts})
 
 
-func _get_editor_screenshot(_params: Dictionary) -> Dictionary:
-	return await _request_screenshot("editor")
+func _get_editor_screenshot(params: Dictionary) -> Dictionary:
+	return await _request_screenshot("editor", params)
 
 
-func _get_game_screenshot(_params: Dictionary) -> Dictionary:
-	return await _request_screenshot("game")
+func _get_game_screenshot(params: Dictionary) -> Dictionary:
+	return await _request_screenshot("game", params)
 
 
 func _reload_plugin(_params: Dictionary) -> Dictionary:
