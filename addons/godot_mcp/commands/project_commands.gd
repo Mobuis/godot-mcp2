@@ -15,9 +15,15 @@ func get_commands() -> Dictionary:
 
 
 func _get_project_info(_params: Dictionary) -> Dictionary:
+	# Autoloads are stored as individual "autoload/Name" settings. There is no
+	# setting called "autoload", so the previous get_setting("autoload", {}) hit
+	# the default every time and this always reported {} — even with autoloads
+	# plainly listed in project.godot. Enumerate the property list instead.
 	var autoloads := {}
-	for setting in ProjectSettings.get_setting("autoload", {}):
-		autoloads[setting] = ProjectSettings.get_setting("autoload/%s" % setting)
+	for info in ProjectSettings.get_property_list():
+		var key: String = info.get("name", "")
+		if key.begins_with("autoload/"):
+			autoloads[key.trim_prefix("autoload/")] = str(ProjectSettings.get_setting(key, ""))
 
 	return _ok({
 		"name": ProjectSettings.get_setting("application/config/name", "Untitled"),
