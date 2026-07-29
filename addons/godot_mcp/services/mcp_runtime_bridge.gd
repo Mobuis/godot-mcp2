@@ -168,14 +168,43 @@ func _search_root() -> Node:
 	return null
 
 
+## Resolves any shape of node path a caller could reasonably hold: the absolute
+## form printed by get_scene_tree ("/root/my_scene/Sprite2D"), the same without
+## the leading slash, an absolute path with the root segment omitted
+## ("/my_scene/Sprite2D"), or a path relative to the current scene ("Sprite2D").
+##
+## The absolute forms used to be handled by stripping only the leading "/",
+## which left "root/my_scene/Sprite2D" — and get_tree().root IS the node named
+## "root", so the lookup went hunting for a child of root also called "root" and
+## could never match. get_scene_tree emits exactly that form, so its own output
+## was not valid input to get_game_node_properties.
 func _resolve_node(path: String) -> Node:
-	var path_text := str(path)
+	var path_text := str(path).strip_edges()
 	if path_text.is_empty() or path_text == ".":
 		return get_tree().current_scene
-	if path_text.begins_with("/root/") or path_text.begins_with("root/"):
-		return get_tree().root.get_node_or_null(NodePath(path_text.trim_prefix("/")))
-	if path_text.begins_with("/"):
-		return get_tree().root.get_node_or_null(NodePath(path_text.trim_prefix("/")))
+
+	var root := get_tree().root
+	if root == null:
+		return null
+
+	# An absolute NodePath resolves from any node, so these can go straight to
+	# get_node_or_null() without being rewritten relative to anything.
+	var absolute: Array[String] = []
+	if path_text == "/root" or path_text.begins_with("/root/"):
+		absolute.append(path_text)
+	elif path_text == "root" or path_text.begins_with("root/"):
+		absolute.append("/" + path_text)
+	elif path_text.begins_with("/"):
+		absolute.append("/root" + path_text)
+		absolute.append(path_text.substr(1))
+
+	for candidate in absolute:
+		var hit := root.get_node_or_null(NodePath(candidate))
+		if hit != null:
+			return hit
+	if not absolute.is_empty():
+		return null
+
 	var scene := get_tree().current_scene
 	if scene == null:
 		return null
