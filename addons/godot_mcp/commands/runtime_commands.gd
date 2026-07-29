@@ -50,9 +50,21 @@ func _capture_frames(p: Dictionary) -> Dictionary:
 	var frames: Array = []
 	for i in count:
 		var shot := await _request_screenshot("game", shot_params)
-		frames.append(shot.get("result", shot))
+		var data: Variant = shot.get("result", shot)
+		# _request_screenshot always writes the same fixed user:// filename, so
+		# each frame overwrites the last. Copy it aside under a per-frame name —
+		# without this the caller gets N identical paths and one file on disk,
+		# which is unusable given this tool returns paths rather than image data.
+		if data is Dictionary and data.has("path"):
+			var src_path := str(data["path"])
+			var dst_path := _user_file("mcp_frame_%d.png" % i)
+			if FileAccess.file_exists(src_path) and DirAccess.copy_absolute(src_path, dst_path) == OK:
+				data["path"] = dst_path
+			else:
+				data["path_warning"] = "could not copy this frame aside; the file at 'path' is overwritten by later frames"
+		frames.append(data)
 		await editor_plugin.get_tree().create_timer(0.1).timeout
-	return _ok({"frames": frames})
+	return _ok({"frames": frames, "count": frames.size()})
 
 
 func _monitor_properties(p: Dictionary) -> Dictionary:

@@ -41,13 +41,18 @@ func _norm_res(path: String) -> String:
 	return ResourceUtils.normalize_res(path)
 
 
-## Longest-edge default for returned screenshots.
+## Starting longest-edge cap for returned screenshots. Only a starting point —
+## SCREENSHOT_MAX_BASE64 is the constraint that actually decides the size.
+const SCREENSHOT_MAX_EDGE := 1024
+
+## Hard ceiling on the base64 payload, in characters.
 ##
-## A raw HiDPI editor capture is ~3024x1898, which base64-encodes to ~1.3M
-## characters and is rejected outright by the MCP client for exceeding its token
-## limit — the tool "worked" and was unusable. 1568 is the longest edge that
-## still reads clearly while keeping the payload manageable.
-const SCREENSHOT_MAX_EDGE := 1568
+## Capping the longest edge alone does not work: PNG size depends on content, so
+## the same edge produces wildly different payloads. Measured on a 3024x1898
+## Retina editor capture, edge caps of 1568 and even 400 still produced 821k and
+## 73k characters respectively, both refused by the client; only ~45k got
+## through. So the budget is the real limit and the edge is derived from it.
+const SCREENSHOT_MAX_BASE64 := 40_000
 
 
 ## Shrinks an image so its longest edge is at most max_edge. Never upscales.
@@ -67,6 +72,27 @@ func _downscale_image(img: Image, max_edge: int) -> Image:
 	return out
 
 
+## Encodes img as base64 PNG, shrinking until it fits within budget.
+##
+## Always re-scales from the original, so repeated passes do not compound
+## resampling loss. base64 length tracks pixel count closely enough to jump most
+## of the way in one step instead of creeping down.
+func _encode_within_budget(img: Image, max_edge: int, budget: int) -> Dictionary:
+	var candidate := _downscale_image(img, max_edge)
+	var b64 := Marshalls.raw_to_base64(candidate.save_png_to_buffer())
+	var attempts := 0
+	while b64.length() > budget and attempts < 6:
+		var longest := maxi(candidate.get_width(), candidate.get_height())
+		var ratio := sqrt(float(budget) / float(b64.length())) * 0.9
+		var next_edge := maxi(96, int(longest * ratio))
+		if next_edge >= longest:
+			break
+		candidate = _downscale_image(img, next_edge)
+		b64 = Marshalls.raw_to_base64(candidate.save_png_to_buffer())
+		attempts += 1
+	return {"image": candidate, "base64": b64}
+
+
 ## Builds a screenshot result. The PNG on disk is always full resolution; only
 ## the returned base64 is downscaled, so compare_screenshots and anything else
 ## reading the file still sees the real capture.
@@ -80,15 +106,28 @@ func _screenshot_result(img: Image, path: String, p: Dictionary, extra: Dictiona
 		result[k] = extra[k]
 
 	if not bool(p.get("include_base64", true)):
-		result["base64_omitted"] = "include_base64 was false; read the file at 'path'"
+		result["base64_omitted"] = "include_base64 was false; read the PNG at 'path'"
 		return _ok(result)
 
-	var max_edge := int(p.get("max_edge", SCREENSHOT_MAX_EDGE))
-	var encoded := _downscale_image(img, max_edge)
-	result["base64"] = Marshalls.raw_to_base64(encoded.save_png_to_buffer())
-	if encoded.get_width() != img.get_width():
-		result["base64_width"] = encoded.get_width()
-		result["base64_height"] = encoded.get_height()
+	var budget := int(p.get("max_base64_chars", SCREENSHOT_MAX_BASE64))
+	var encoded := _encode_within_budget(img, int(p.get("max_edge", SCREENSHOT_MAX_EDGE)), budget)
+	var image: Image = encoded["image"]
+	var b64: String = encoded["base64"]
+
+	# Never return a payload known to be over budget — the client rejects the
+	# whole result, so the caller loses the path as well as the image.
+	if b64.length() > budget:
+		result["base64_omitted"] = (
+			"image does not fit in %d base64 chars even at %dpx; read the PNG at 'path'"
+			% [budget, maxi(image.get_width(), image.get_height())]
+		)
+		return _ok(result)
+
+	result["base64"] = b64
+	result["base64_chars"] = b64.length()
+	if image.get_width() != img.get_width():
+		result["base64_width"] = image.get_width()
+		result["base64_height"] = image.get_height()
 		result["downscaled"] = true
 	return _ok(result)
 
