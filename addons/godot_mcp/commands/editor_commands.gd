@@ -8,7 +8,6 @@ func get_commands() -> Dictionary:
 	return {
 		"get_editor_errors": _get_editor_errors,
 		"get_output_log": _get_output_log,
-		"execute_editor_script": _execute_editor_script,
 		"clear_output": _clear_output,
 		"get_open_scripts": _get_open_scripts,
 		"get_editor_screenshot": _get_editor_screenshot,
@@ -50,23 +49,6 @@ func _get_output_log(params: Dictionary) -> Dictionary:
 	var start := maxi(0, _output_buffer.size() - max_lines)
 	var lines := _output_buffer.slice(start)
 	return _ok({"lines": Array(lines), "count": lines.size()})
-
-
-func _execute_editor_script(params: Dictionary) -> Dictionary:
-	var code: String = params.get("code", "")
-	if code.is_empty():
-		return _err("Missing 'code'")
-
-	var expr := Expression.new()
-	var err := expr.parse(code)
-	if err != OK:
-		return _err("Parse error: %s" % expr.get_error_text(), -32003)
-
-	var result: Variant = expr.execute([], _edited_root(), false)
-	if expr.has_execute_failed():
-		return _err("Execution failed: %s" % expr.get_error_text(), -32003)
-
-	return _ok({"result": _serialize_value(result)})
 
 
 func _clear_output(_params: Dictionary) -> Dictionary:

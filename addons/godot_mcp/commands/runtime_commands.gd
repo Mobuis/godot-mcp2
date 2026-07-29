@@ -10,7 +10,6 @@ func get_commands() -> Dictionary:
 		"get_game_scene_tree": _get_game_scene_tree,
 		"get_game_node_properties": _get_game_node_properties,
 		"set_game_node_property": _set_game_node_property,
-		"execute_game_script": _execute_game_script,
 		"capture_frames": _capture_frames,
 		"monitor_properties": _monitor_properties,
 		"start_recording": _start_recording,
@@ -39,10 +38,6 @@ func _get_game_node_properties(p: Dictionary) -> Dictionary:
 
 func _set_game_node_property(p: Dictionary) -> Dictionary:
 	return await _runtime_call("set_node_property", p)
-
-
-func _execute_game_script(p: Dictionary) -> Dictionary:
-	return await _runtime_call("execute_script", {"code": p.get("code", "")})
 
 
 func _capture_frames(p: Dictionary) -> Dictionary:
@@ -115,10 +110,13 @@ func _find_nearby_nodes(p: Dictionary) -> Dictionary:
 
 
 func _navigate_to(p: Dictionary) -> Dictionary:
-	return await _runtime_call("execute_script", {
-		"code": "get_node('%s').target_position = Vector2(%s, %s)" % [
-			p.get("agent_path", "."), p.get("x", 0), p.get("y", 0)
-		]
+	# T-106: this used to build a GDScript string and hand it to the runtime
+	# bridge's Expression evaluator, which DECISIONS.md D-1 removes. The typed
+	# set_node_property action does the same job without an evaluator.
+	return await _runtime_call("set_node_property", {
+		"node_path": p.get("agent_path", "."),
+		"property": "target_position",
+		"value": "Vector2(%s, %s)" % [p.get("x", 0), p.get("y", 0)],
 	})
 
 

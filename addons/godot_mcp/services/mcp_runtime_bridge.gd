@@ -67,15 +67,6 @@ func _dispatch_async(req: Dictionary) -> Dictionary:
 			var prop: String = params.get("property", "")
 			node.set(prop, _parse(params.get("value", "")))
 			return {"result": {"ok": true}}
-		"execute_script":
-			var expr := Expression.new()
-			if expr.parse(params.get("code", "")) != OK:
-				return {"error": expr.get_error_text()}
-			var node := get_tree().current_scene
-			var val = expr.execute([], node, false)
-			if expr.has_execute_failed():
-				return {"error": expr.get_error_text()}
-			return {"result": str(val)}
 		"find_by_script":
 			var results: Array = []
 			var search_root := _search_root()
