@@ -46,7 +46,7 @@ func _collect_scripts(path: String, results: Array) -> void:
 func _read_script(params: Dictionary) -> Dictionary:
 	var script_path := _norm_res(params.get("script_path", ""))
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(params, "script_path"))
 	if not FileAccess.file_exists(script_path):
 		return _err("Script not found: %s" % script_path)
 	return _ok({"script_path": script_path, "content": FileAccess.get_file_as_string(script_path)})
@@ -57,7 +57,7 @@ func _create_script(params: Dictionary) -> Dictionary:
 	var content: String = params.get("content", "extends Node\n")
 	var overwrite: bool = params.get("overwrite", false)
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(params, "script_path"))
 	if FileAccess.file_exists(script_path) and not overwrite:
 		return _err("Script already exists: %s" % script_path, -32002)
 
@@ -78,7 +78,7 @@ func _edit_script(params: Dictionary) -> Dictionary:
 	var search: String = params.get("search", "")
 	var replace: String = params.get("replace", "")
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(params, "script_path"))
 	if not FileAccess.file_exists(script_path):
 		return _err("Script not found: %s" % script_path)
 
@@ -106,7 +106,7 @@ func _attach_script(params: Dictionary) -> Dictionary:
 	if node == null:
 		return _err("Node not found: %s" % node_path)
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(params, "script_path"))
 	if not FileAccess.file_exists(script_path):
 		return _err("Script not found: %s" % script_path)
 
@@ -131,7 +131,7 @@ func _validate_script(params: Dictionary) -> Dictionary:
 	if content.is_empty():
 		script_path = _norm_res(script_path)
 		if script_path.is_empty():
-			return _err("Missing or rejected 'script_path'")
+			return _err(_path_error(params, "script_path"))
 		content = FileAccess.get_file_as_string(script_path)
 
 	var script := GDScript.new()

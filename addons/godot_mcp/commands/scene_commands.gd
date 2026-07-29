@@ -36,7 +36,7 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 		scene_path = root.scene_file_path
 	scene_path = _norm_res(scene_path)
 	if scene_path.is_empty():
-		return _err("Missing or rejected 'scene_path'")
+		return _err(_path_error(params, "scene_path"))
 	if not FileAccess.file_exists(scene_path):
 		return _err("Scene file not found: %s" % scene_path, -32001)
 	return _ok({"scene_path": scene_path, "content": FileAccess.get_file_as_string(scene_path)})
@@ -45,7 +45,7 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 func _open_scene(params: Dictionary) -> Dictionary:
 	var scene_path := _norm_res(params.get("scene_path", ""))
 	if scene_path.is_empty():
-		return _err("Missing or rejected 'scene_path'")
+		return _err(_path_error(params, "scene_path"))
 	if not FileAccess.file_exists(scene_path):
 		return _err("Scene file not found: %s" % scene_path, -32001)
 	editor_plugin.get_editor_interface().open_scene_from_path(scene_path)
@@ -67,7 +67,7 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	var scene_path := _norm_res(params.get("scene_path", ""))
 	var root_type: String = params.get("root_type", "Node2D")
 	if scene_path.is_empty():
-		return _err("Missing or rejected 'scene_path'")
+		return _err(_path_error(params, "scene_path"))
 	if FileAccess.file_exists(scene_path) and not params.get("overwrite", false):
 		return _err("Scene already exists: %s" % scene_path, -32002, {"suggestion": "Set overwrite=true to replace"})
 
@@ -96,7 +96,7 @@ func _play_scene(params: Dictionary) -> Dictionary:
 		_:
 			var scene_path := _norm_res(params.get("scene_path", ""))
 			if scene_path.is_empty():
-				return _err("Custom play mode requires a valid scene_path")
+				return _err("Custom play mode: %s" % _path_error(params, "scene_path"))
 			editor_plugin.get_editor_interface().play_custom_scene(scene_path)
 	return _ok({"playing": true, "mode": mode})
 
@@ -109,7 +109,7 @@ func _stop_scene(_params: Dictionary) -> Dictionary:
 func _delete_scene(params: Dictionary) -> Dictionary:
 	var scene_path := _norm_res(params.get("scene_path", ""))
 	if scene_path.is_empty():
-		return _err("Missing scene_path")
+		return _err(_path_error(params, "scene_path"))
 	if not (scene_path.get_extension().to_lower() in ["tscn", "scn"]):
 		return _err("delete_scene only deletes .tscn or .scn files, got: %s" % scene_path)
 	if not FileAccess.file_exists(scene_path):
@@ -131,7 +131,7 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent_path", ".")
 	var instance_name: String = params.get("name", "")
 	if scene_path.is_empty():
-		return _err("Missing scene_path")
+		return _err(_path_error(params, "scene_path"))
 	var packed: PackedScene = load(scene_path)
 	if packed == null:
 		return _err("Failed to load scene: %s" % scene_path)
@@ -155,7 +155,7 @@ func _get_scene_exports(p: Dictionary) -> Dictionary:
 	if path.is_empty() and _edited_root():
 		path = _edited_root().scene_file_path
 	if path.is_empty():
-		return _err("Missing scene path")
+		return _err(_path_error(p, "scene_path"))
 	if not FileAccess.file_exists(path):
 		return _err("Scene not found: %s" % path)
 	var packed: PackedScene = load(path)

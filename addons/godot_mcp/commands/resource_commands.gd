@@ -39,7 +39,7 @@ func _edit_resource(p: Dictionary) -> Dictionary:
 func _create_resource(p: Dictionary) -> Dictionary:
 	var path := _norm_res(p.get("resource_path", ""))
 	if path.is_empty():
-		return _err("Missing or rejected 'resource_path'")
+		return _err(_path_error(p, "resource_path"))
 	var type_name: String = p.get("type", "Resource")
 	if not ClassDB.class_exists(type_name):
 		return _err("Unknown type")
@@ -60,7 +60,7 @@ func _add_autoload(p: Dictionary) -> Dictionary:
 	if name.is_empty():
 		return _err("Missing name")
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(p, "script_path"))
 	ProjectSettings.set_setting("autoload/%s" % name, "*%s" % script_path)
 	ProjectSettings.save()
 	return _ok({"autoload": name, "path": script_path})

@@ -136,7 +136,7 @@ func _set_on_matching(node: Node, type_name: String, property: String, value_tex
 func _find_script_references(p: Dictionary) -> Dictionary:
 	var script_path := _norm_res(p.get("script_path", ""))
 	if script_path.is_empty():
-		return _err("Missing or rejected 'script_path'")
+		return _err(_path_error(p, "script_path"))
 	var matches: Array = []
 	_search_in_dir("res://", script_path, matches)
 	return _ok({"script": script_path, "references": matches})

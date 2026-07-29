@@ -39,7 +39,7 @@ func _search_files(params: Dictionary) -> Dictionary:
 
 	directory = _norm_res(directory)
 	if directory.is_empty():
-		return _err("Rejected 'directory'")
+		return _err(_path_error(params, "directory"))
 
 	var results: Array = []
 	_collect_files(directory, pattern, recursive, results, max_results)
@@ -99,7 +99,7 @@ func _get_filesystem_tree(params: Dictionary) -> Dictionary:
 	var max_depth: int = int(params.get("max_depth", 4))
 	directory = _norm_res(directory)
 	if directory.is_empty():
-		return _err("Rejected 'directory'")
+		return _err(_path_error(params, "directory"))
 	return _ok({"tree": _build_tree(directory, 0, max_depth)})
 
 

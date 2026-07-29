@@ -41,6 +41,21 @@ func _norm_res(path: String) -> String:
 	return ResourceUtils.normalize_res(path)
 
 
+## Builds the error for a path parameter that _norm_res() refused.
+##
+## "you did not supply this" and "you supplied something the guard rejected" are
+## different problems with different fixes, and collapsing them into one string
+## made the guards undebuggable — a caller could not tell a typo from a blocked
+## traversal. Says which rule refused, and echoes the offending path.
+func _path_error(params: Dictionary, key: String) -> String:
+	var raw := str(params.get(key, "")).strip_edges()
+	if raw.is_empty():
+		return "Missing '%s'" % key
+	if ".." in raw:
+		return "Rejected '%s': %s — parent-directory segments are not allowed, paths must stay inside the project" % [key, raw]
+	return "Rejected '%s': %s" % [key, raw]
+
+
 ## T-105: true only if an absolute filesystem path resolves inside the project
 ## directory. Any destructive handler acting on a caller-supplied path must gate
 ## on this, not on normalize_res() alone.
