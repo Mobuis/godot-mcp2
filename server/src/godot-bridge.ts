@@ -82,7 +82,7 @@ export class GodotBridge {
       this.isAlive = true;
       console.error(`[godot-mcp] Godot editor connected on port ${this.port}`);
 
-      ws.on("message", (data) => this.onMessage(data.toString()));
+      ws.on("message", (data) => this.onMessage(ws, data.toString()));
       ws.on("close", () => {
         // T-201: only the *active* client's departure invalidates pending work.
         if (this.client === ws) {
@@ -173,7 +173,13 @@ export class GodotBridge {
     this.wss = null;
   }
 
-  private onMessage(text: string): void {
+  private onMessage(ws: WebSocket, text: string): void {
+    // T-103: a socket that is no longer the active client must not resolve
+    // pending requests or refresh the liveness flag. A departing socket can
+    // still deliver frames after a newcomer has taken its place, which would
+    // otherwise let it answer requests it was never sent and mask a hung peer.
+    if (ws !== this.client) return;
+
     let msg: {
       id?: number;
       method?: string;

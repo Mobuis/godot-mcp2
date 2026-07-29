@@ -91,6 +91,8 @@ func _edit_script(params: Dictionary) -> Dictionary:
 		existing = existing.replace(search, replace)
 
 	var file := FileAccess.open(script_path, FileAccess.WRITE)
+	if file == null:
+		return _err("Failed to write script: %s" % script_path)
 	file.store_string(existing)
 	file.close()
 	editor_plugin.get_editor_interface().get_resource_filesystem().scan()

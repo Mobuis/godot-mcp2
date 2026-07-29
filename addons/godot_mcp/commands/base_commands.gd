@@ -78,6 +78,8 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 	if FileAccess.file_exists(res_path):
 		DirAccess.remove_absolute(res_path)
 	var file := FileAccess.open(req_path, FileAccess.WRITE)
+	if file == null:
+		return _err("Failed to write runtime request file", -32012)
 	file.store_string(JSON.stringify({"id": request_id, "action": action, "params": params}))
 	file.close()
 	var elapsed := 0.0
@@ -120,6 +122,8 @@ func _request_screenshot(target: String = "editor") -> Dictionary:
 	if FileAccess.file_exists(res_path):
 		DirAccess.remove_absolute(res_path)
 	var file := FileAccess.open(req_path, FileAccess.WRITE)
+	if file == null:
+		return _err("Failed to write screenshot request file")
 	file.store_string(JSON.stringify({"id": request_id, "target": target}))
 	file.close()
 	if target == "editor":
