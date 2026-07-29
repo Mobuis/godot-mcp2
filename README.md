@@ -1,7 +1,5 @@
 # Godot MCP
 
-**Language:** **English** | [简体中文](README.zh.md)
-
 Open-source Godot MCP server that lets AI assistants (Claude Code, Cursor, Codex, and more) control the Godot 4 editor directly through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 ```
@@ -147,10 +145,15 @@ godot-mcp/
 │   │   ├── godot-bridge.ts        # WebSocket server + JSON-RPC
 │   │   ├── tools.ts               # Tool registration
 │   │   └── tool-manifest.ts       # 156 tool definitions (name / description / params)
+│   ├── scripts/
+│   │   ├── check-parity.mjs       # Manifest ↔ handler drift check
+│   │   └── check-invariants.mjs   # Security/robustness regression locks
+│   ├── test/                      # vitest suite for the WebSocket bridge
 │   └── build/index.js             # Build output (MCP entry point)
+├── scripts/verify.sh              # The single gate: syntax, parity, invariants, tsc, tests
 ├── .mcp.json.example              # Sample MCP client config
-├── README.md                      # English docs (default)
-└── README.zh.md                   # Chinese docs
+├── SECURITY.md                    # Threat model and standing security decisions
+└── README.md
 ```
 
 ## Requirements
@@ -267,6 +270,19 @@ Then rebuild the server:
 ```bash
 cd server && npm run build
 ```
+
+`npm run build` runs the parity check first, so a handler without a manifest
+entry — or the reverse — fails the build rather than shipping a tool nobody can
+call.
+
+Before committing, run the full gate:
+
+```bash
+./scripts/verify.sh
+```
+
+It runs `gdparse` over `addons/`, the parity check, the security invariants,
+`tsc --noEmit` and the vitest suite. It must exit 0.
 
 ## Known limitations
 
