@@ -39,6 +39,20 @@ func _norm_res(path: String) -> String:
 	return ResourceUtils.normalize_res(path)
 
 
+## T-105: true only if an absolute filesystem path resolves inside the project
+## directory. Any destructive handler acting on a caller-supplied path must gate
+## on this, not on normalize_res() alone.
+func _is_inside_project(abs_path: String) -> bool:
+	if abs_path.is_empty():
+		return false
+	var root := ProjectSettings.globalize_path("res://").simplify_path()
+	if root.is_empty():
+		return false
+	if not root.ends_with("/"):
+		root += "/"
+	return abs_path.simplify_path().begins_with(root)
+
+
 func _user_file(name: String) -> String:
 	return OS.get_user_data_dir().path_join(name)
 

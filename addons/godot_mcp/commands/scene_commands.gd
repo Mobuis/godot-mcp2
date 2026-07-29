@@ -110,9 +110,16 @@ func _delete_scene(params: Dictionary) -> Dictionary:
 	var scene_path := _norm_res(params.get("scene_path", ""))
 	if scene_path.is_empty():
 		return _err("Missing scene_path")
+	if not (scene_path.get_extension().to_lower() in ["tscn", "scn"]):
+		return _err("delete_scene only deletes .tscn or .scn files, got: %s" % scene_path)
 	if not FileAccess.file_exists(scene_path):
 		return _err("Scene not found: %s" % scene_path)
-	var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(scene_path))
+	# T-105: normalize_res() rejects "..", but res:// can still be remapped, so
+	# confine the resolved absolute path to the project directory before deleting.
+	var abs_path := ProjectSettings.globalize_path(scene_path)
+	if not _is_inside_project(abs_path):
+		return _err("Refusing to delete outside the project directory: %s" % scene_path)
+	var err := DirAccess.remove_absolute(abs_path)
 	if err != OK:
 		return _err("Failed to delete scene")
 	editor_plugin.get_editor_interface().get_resource_filesystem().scan()
