@@ -37,6 +37,11 @@ func _process(_delta: float) -> void:
 		return
 	for ev in events:
 		_apply(ev)
+	# parse_input_event only *queues*; the queue is drained at the start of the
+	# next engine iteration. Without this, a caller that acts and then
+	# immediately inspects or screenshots reads pre-event state and concludes
+	# the input did nothing.
+	Input.flush_buffered_events()
 
 
 func _apply(ev: Dictionary) -> void:
@@ -44,22 +49,68 @@ func _apply(ev: Dictionary) -> void:
 		"key":
 			var e := InputEventKey.new()
 			e.keycode = int(ev.get("keycode", 0))
+			# Both, deliberately. An InputMap action binds either the layout
+			# keycode or the physical one, and Godot matches on whichever the
+			# *binding* uses. Godot's own editor writes physical bindings by
+			# default, so sending only `keycode` silently fails to trigger most
+			# real projects' actions.
+			e.physical_keycode = int(ev.get("physical_keycode", e.keycode))
 			e.pressed = ev.get("pressed", true)
 			Input.parse_input_event(e)
 		"mouse_click":
+			var point := Vector2(ev.get("x", 0), ev.get("y", 0))
+			# Move the real pointer first. Games that pick from the cursor read
+			# get_viewport().get_mouse_position() rather than the event's
+			# position -- that is the standard click-to-move raycast in 3D -- so
+			# an event alone lands at wherever the pointer physically happens to
+			# be, usually outside the window, and the click appears to do
+			# nothing at all.
+			Input.warp_mouse(point)
 			var e := InputEventMouseButton.new()
-			e.position = Vector2(ev.get("x", 0), ev.get("y", 0))
+			e.position = point
+			e.global_position = point
 			e.button_index = int(ev.get("button", MOUSE_BUTTON_LEFT))
+			e.button_mask = _mask_for(e.button_index)
 			e.pressed = true
 			Input.parse_input_event(e)
-			e.pressed = false
-			Input.parse_input_event(e)
+			var release := InputEventMouseButton.new()
+			release.position = point
+			release.global_position = point
+			release.button_index = e.button_index
+			release.pressed = false
+			Input.parse_input_event(release)
 		"mouse_move":
+			var point := Vector2(ev.get("x", 0), ev.get("y", 0))
+			var previous := _viewport_mouse_position()
+			Input.warp_mouse(point)
 			var e := InputEventMouseMotion.new()
-			e.position = Vector2(ev.get("x", 0), ev.get("y", 0))
+			e.position = point
+			e.global_position = point
+			e.relative = point - previous
 			Input.parse_input_event(e)
 		"action":
-			if ev.get("pressed", true):
-				Input.action_press(str(ev.get("action", "")))
-			else:
-				Input.action_release(str(ev.get("action", "")))
+			var e := InputEventAction.new()
+			e.action = StringName(str(ev.get("action", "")))
+			e.pressed = ev.get("pressed", true)
+			# An InputEventAction, not Input.action_press(). action_press flips
+			# the action's internal state without dispatching anything, so
+			# _input/_unhandled_input handlers -- where almost every game reads
+			# actions -- never see it and nothing happens.
+			Input.parse_input_event(e)
+
+
+func _mask_for(button_index: int) -> int:
+	match button_index:
+		MOUSE_BUTTON_LEFT:
+			return MOUSE_BUTTON_MASK_LEFT
+		MOUSE_BUTTON_RIGHT:
+			return MOUSE_BUTTON_MASK_RIGHT
+		MOUSE_BUTTON_MIDDLE:
+			return MOUSE_BUTTON_MASK_MIDDLE
+		_:
+			return 0
+
+
+func _viewport_mouse_position() -> Vector2:
+	var viewport := get_viewport()
+	return viewport.get_mouse_position() if viewport != null else Vector2.ZERO

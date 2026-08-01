@@ -13,6 +13,8 @@ var _request_seq: int = 0
 const RUNTIME_REQ := "mcp_runtime_req.json"
 const RUNTIME_RES := "mcp_runtime_res.json"
 const SCREENSHOT_REQ := "mcp_screenshot_req.json"
+## Shared with MCPInputBridge.QUEUE_FILE; both sides must name the same file.
+const INPUT_QUEUE := "mcp_input_queue.json"
 const SCREENSHOT_RES := "mcp_screenshot_res.png"
 const SCREENSHOT_META := "mcp_screenshot_meta.json"
 
@@ -214,14 +216,34 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 	return _err("Runtime request timed out after %.1fs: %s" % [timeout_sec, action], -32011)
 
 
-func _queue_input(events: Array) -> void:
-	var bridge = _get_input_bridge()
-	if bridge:
-		bridge.queue_events(events)
-
-
-func _get_input_bridge() -> Node:
-	return get_node_or_null("/root/MCPInputBridge")
+## Appends synthetic input events to the queue the running game drains.
+##
+## Written straight to disk rather than through the MCPInputBridge node. That
+## node is an autoload, and autoloads whose script is not @tool are never
+## instantiated in the *editor* -- which is where these commands run. Looking it
+## up here always returned null, so every simulated key, click and action was
+## silently dropped while the tool still answered {"queued": true}. The same
+## user-data directory backs the screenshot IPC, so writing the file directly is
+## the mechanism already proven to cross the editor/game process boundary.
+##
+## Returns false when the queue could not be written, so callers can report the
+## failure instead of claiming success.
+func _queue_input(events: Array) -> bool:
+	if events.is_empty():
+		return true
+	var path := _user_file(INPUT_QUEUE)
+	var pending: Array = []
+	if FileAccess.file_exists(path):
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if parsed is Array:
+			pending = parsed
+	pending.append_array(events)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(pending))
+	file.close()
+	return true
 
 
 func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dictionary:

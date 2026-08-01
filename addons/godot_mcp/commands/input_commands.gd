@@ -14,46 +14,57 @@ func get_commands() -> Dictionary:
 
 
 func _simulate_key(params: Dictionary) -> Dictionary:
-	_queue_input([{
+	var event := {
 		"type": "key",
 		"keycode": int(params.get("keycode", KEY_SPACE)),
 		"pressed": params.get("pressed", true),
-	}])
-	return _ok({"queued": true})
+	}
+	# Optional: forward a physical keycode when the caller distinguishes it.
+	# Left absent, the bridge mirrors `keycode` into it so bindings made against
+	# physical keys -- which is Godot's own default -- still match.
+	if params.has("physical_keycode"):
+		event["physical_keycode"] = int(params.get("physical_keycode"))
+	return _queued(_queue_input([event]))
 
 
 func _simulate_mouse_click(params: Dictionary) -> Dictionary:
-	_queue_input([{
+	return _queued(_queue_input([{
 		"type": "mouse_click",
 		"x": float(params.get("x", 0)),
 		"y": float(params.get("y", 0)),
 		"button": int(params.get("button", MOUSE_BUTTON_LEFT)),
-	}])
-	return _ok({"queued": true})
+	}]))
 
 
 func _simulate_mouse_move(params: Dictionary) -> Dictionary:
-	_queue_input([{
+	return _queued(_queue_input([{
 		"type": "mouse_move",
 		"x": float(params.get("x", 0)),
 		"y": float(params.get("y", 0)),
-	}])
-	return _ok({"queued": true})
+	}]))
 
 
 func _simulate_action(params: Dictionary) -> Dictionary:
-	_queue_input([{
+	return _queued(_queue_input([{
 		"type": "action",
 		"action": str(params.get("action", "")),
 		"pressed": params.get("pressed", true),
-	}])
-	return _ok({"queued": true})
+	}]))
 
 
 func _simulate_sequence(params: Dictionary) -> Dictionary:
 	var events: Array = params.get("events", [])
-	_queue_input(events)
+	if not _queue_input(events):
+		return _err("Could not write the input queue")
 	return _ok({"queued": events.size()})
+
+
+## Reports whether the events actually reached the queue, rather than always
+## claiming success.
+func _queued(ok: bool) -> Dictionary:
+	if not ok:
+		return _err("Could not write the input queue")
+	return _ok({"queued": true})
 
 
 func _get_input_actions(_params: Dictionary) -> Dictionary:
