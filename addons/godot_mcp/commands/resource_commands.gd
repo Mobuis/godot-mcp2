@@ -48,10 +48,30 @@ func _create_resource(p: Dictionary) -> Dictionary:
 	return _ok({"created": path})
 
 
+## Describes a resource on disk.
+##
+## `EditorFileSystem.get_file_icon()` does not exist in Godot 4.7 — the call
+## aborted the handler, and the empty result was reported as success, so this tool
+## answered `{}` for every input. Thumbnails come from EditorResourcePreview,
+## which is asynchronous; rather than block a tool call on a render, report what
+## can be established synchronously and whether a thumbnail is obtainable at all.
 func _get_resource_preview(p: Dictionary) -> Dictionary:
 	var path := _norm_res(p.get("resource_path", ""))
-	var tex: Texture2D = editor_plugin.get_editor_interface().get_resource_filesystem().get_file_icon(path)
-	return _ok({"path": path, "has_icon": tex != null})
+	if path.is_empty():
+		return _err(_path_error(p, "resource_path"))
+	if not ResourceLoader.exists(path):
+		return _err("Resource not found: %s" % path)
+	var res: Resource = load(path)
+	if res == null:
+		return _err("Resource could not be loaded: %s" % path)
+	var previewer := editor_plugin.get_editor_interface().get_resource_previewer()
+	return _ok({
+		"path": path,
+		"type": res.get_class(),
+		"resource_name": res.resource_name,
+		"previewable": previewer != null,
+		"dependencies": ResourceLoader.get_dependencies(path),
+	})
 
 
 func _add_autoload(p: Dictionary) -> Dictionary:
