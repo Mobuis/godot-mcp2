@@ -1,10 +1,6 @@
 @tool
 extends "res://addons/godot_mcp/commands/base_commands.gd"
 
-var _monitors: Dictionary = {}
-var _recording: Array = []
-
-
 func get_commands() -> Dictionary:
 	return {
 		"get_game_scene_tree": _get_game_scene_tree,
@@ -12,6 +8,7 @@ func get_commands() -> Dictionary:
 		"set_game_node_property": _set_game_node_property,
 		"capture_frames": _capture_frames,
 		"monitor_properties": _monitor_properties,
+		"get_monitored_properties": _get_monitored_properties,
 		"start_recording": _start_recording,
 		"stop_recording": _stop_recording,
 		"replay_recording": _replay_recording,
@@ -68,13 +65,14 @@ func _capture_frames(p: Dictionary) -> Dictionary:
 
 
 func _monitor_properties(p: Dictionary) -> Dictionary:
-	var key: String = p.get("key", "default")
-	_monitors[key] = p
-	return _ok({"monitoring": key})
+	return await _runtime_call("monitor_properties", p)
+
+
+func _get_monitored_properties(p: Dictionary) -> Dictionary:
+	return await _runtime_call("get_monitored", p)
 
 
 func _start_recording(_p: Dictionary) -> Dictionary:
-	_recording.clear()
 	return await _runtime_call("record_input", {"enabled": true})
 
 
@@ -118,23 +116,50 @@ func _wait_for_node(p: Dictionary) -> Dictionary:
 
 
 func _find_nearby_nodes(p: Dictionary) -> Dictionary:
-	var pos := Vector2(float(p.get("x", 0)), float(p.get("y", 0)))
-	var radius: float = float(p.get("radius", 100))
-	var tree_res := await _runtime_call("get_scene_tree")
-	if tree_res.has("error"):
-		return tree_res
-	return _ok({"position": str(pos), "radius": radius, "note": "Use get_game_scene_tree and filter by position"})
+	return await _runtime_call("find_nearby", p)
 
 
+## Points a NavigationAgent at a destination.
+##
+## T-106: this used to build a GDScript string and hand it to the runtime
+## bridge's Expression evaluator, which DECISIONS.md D-1 removes. The typed
+## set_node_property action does the same job without an evaluator.
+##
+## The replacement then hardcoded `Vector2(x, y)`, and NavigationAgent3D's
+## target_position is a Vector3 — so on a 3D agent the write was discarded and the
+## tool still answered {"ok": true}. A 3D destination also could not be expressed:
+## there was no z. Now the vector matches the agent's dimension, and the bridge
+## rejects a mismatch rather than swallowing it.
 func _navigate_to(p: Dictionary) -> Dictionary:
-	# T-106: this used to build a GDScript string and hand it to the runtime
-	# bridge's Expression evaluator, which DECISIONS.md D-1 removes. The typed
-	# set_node_property action does the same job without an evaluator.
-	return await _runtime_call("set_node_property", {
-		"node_path": p.get("agent_path", "."),
+	var agent_path: String = p.get("agent_path", ".")
+	var is_3d: bool = p.get("is_3d", p.has("z"))
+	var value := (
+		"Vector3(%s, %s, %s)" % [p.get("x", 0), p.get("y", 0), p.get("z", 0)]
+		if is_3d
+		else "Vector2(%s, %s)" % [p.get("x", 0), p.get("y", 0)]
+	)
+	var res := await _runtime_call("set_node_property", {
+		"node_path": agent_path,
 		"property": "target_position",
-		"value": "Vector2(%s, %s)" % [p.get("x", 0), p.get("y", 0)],
+		"value": value,
 	})
+	# A 2D vector on a 3D agent (or the reverse) now comes back as a real error.
+	# Retry once in the other dimension so callers that omit `z` on a 3D agent get
+	# the obvious behaviour instead of a lecture.
+	if res.has("error") and not p.has("is_3d"):
+		var flipped := (
+			"Vector2(%s, %s)" % [p.get("x", 0), p.get("y", 0)]
+			if is_3d
+			else "Vector3(%s, %s, %s)" % [p.get("x", 0), p.get("y", 0), p.get("z", 0)]
+		)
+		var retry := await _runtime_call("set_node_property", {
+			"node_path": agent_path,
+			"property": "target_position",
+			"value": flipped,
+		})
+		if not retry.has("error"):
+			return retry
+	return res
 
 
 func _move_to(p: Dictionary) -> Dictionary:
