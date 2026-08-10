@@ -16,11 +16,20 @@ func _setup_navigation_region(p: Dictionary) -> Dictionary:
 	var parent := _resolve_node(p.get("parent_path", "."))
 	if parent == null:
 		return _err("Parent not found")
-	var region := NavigationRegion3D.new() if p.get("is_3d", true) else NavigationRegion2D.new()
+	var is_3d: bool = p.get("is_3d", true)
+	var region := NavigationRegion3D.new() if is_3d else NavigationRegion2D.new()
 	region.name = p.get("name", "NavigationRegion")
+	# A region with no mesh resource cannot be baked. The engine logged "Baking the
+	# navigation mesh requires a valid NavigationMesh resource" while
+	# bake_navigation_mesh still answered {"baked": true}, so give the region
+	# something to bake into.
+	if is_3d:
+		region.navigation_mesh = NavigationMesh.new()
+	else:
+		region.navigation_polygon = NavigationPolygon.new()
 	parent.add_child(region, true)
 	region.owner = _edited_root()
-	return _ok({"path": str(region.get_path())})
+	return _ok({"path": _scene_path(region), "has_mesh": true})
 
 
 func _setup_navigation_agent(p: Dictionary) -> Dictionary:
@@ -33,20 +42,26 @@ func _setup_navigation_agent(p: Dictionary) -> Dictionary:
 		agent.max_speed = float(p.get("max_speed", 5.0))
 	parent.add_child(agent, true)
 	agent.owner = _edited_root()
-	return _ok({"path": str(agent.get_path())})
+	return _ok({"path": _scene_path(agent)})
 
 
 func _bake_navigation_mesh(p: Dictionary) -> Dictionary:
 	var node := _resolve_node(p.get("node_path", ""))
 	if node == null:
 		return _err("Node not found")
+	# Baking without a mesh resource is an engine-level error the caller never saw:
+	# the region logged a complaint and this returned {"baked": true} regardless.
 	if node is NavigationRegion3D:
+		if node.navigation_mesh == null:
+			return _err("%s has no NavigationMesh to bake into. Assign one, or create the region with setup_navigation_region." % node.name)
 		node.bake_navigation_mesh()
 	elif node is NavigationRegion2D:
+		if node.navigation_polygon == null:
+			return _err("%s has no NavigationPolygon to bake into." % node.name)
 		node.bake_navigation_polygon()
 	else:
-		return _err("NavigationRegion node required")
-	return _ok({"baked": true})
+		return _err("NavigationRegion node required, got %s" % node.get_class())
+	return _ok({"baked": true, "node_path": _scene_path(node)})
 
 
 func _set_navigation_layers(p: Dictionary) -> Dictionary:

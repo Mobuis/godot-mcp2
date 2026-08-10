@@ -33,9 +33,21 @@ func _create_animation(p: Dictionary) -> Dictionary:
 		return _err("AnimationPlayer not found")
 	var anim := Animation.new()
 	anim.length = float(p.get("length", 1.0))
-	player.add_animation_library("", AnimationLibrary.new()) if player.get_animation_library("") == null else null
-	player.get_animation_library("").add_animation(anim_name, anim)
-	return _ok({"animation": anim_name})
+	# get_animation_library() on a player that has none logs "Method/function
+	# failed. Returning: Ref<AnimationLibrary>()" — so the check for whether a
+	# library existed was itself producing an engine error on every call.
+	# has_animation_library() answers the same question quietly.
+	if not player.has_animation_library(""):
+		var added := player.add_animation_library("", AnimationLibrary.new())
+		if added != OK:
+			return _err("Could not add a default animation library to %s (error %d)" % [player.name, added])
+	var library := player.get_animation_library("")
+	if library == null:
+		return _err("AnimationPlayer %s has no default animation library" % player.name)
+	library.add_animation(anim_name, anim)
+	if not player.has_animation(anim_name):
+		return _err("Animation '%s' was not registered on %s" % [anim_name, player.name])
+	return _ok({"animation": anim_name, "length": anim.length})
 
 
 func _add_animation_track(p: Dictionary) -> Dictionary:
