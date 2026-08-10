@@ -36,7 +36,7 @@ func _process(_delta: float) -> void:
 	if not events is Array:
 		return
 	for ev in events:
-		_apply(ev)
+		apply_event(ev)
 	# parse_input_event only *queues*; the queue is drained at the start of the
 	# next engine iteration. Without this, a caller that acts and then
 	# immediately inspects or screenshots reads pre-event state and concludes
@@ -44,7 +44,10 @@ func _process(_delta: float) -> void:
 	Input.flush_buffered_events()
 
 
-func _apply(ev: Dictionary) -> void:
+## Public so MCPRuntimeBridge's replay path can reuse it. Replaying a recorded
+## event and simulating a fresh one have to build the event the same way, or
+## replay quietly behaves differently from the tool that produced the recording.
+func apply_event(ev: Dictionary) -> void:
 	match ev.get("type", ""):
 		"key":
 			var e := InputEventKey.new()
