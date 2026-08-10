@@ -245,6 +245,74 @@ const INVARIANTS = [
     },
   },
   {
+    id: "INV-301",
+    task: "0001",
+    desc: "a handler that dies on a runtime error is reported as an error, not as success",
+    check() {
+      const src = read("addons/godot_mcp/command_router.gd");
+      if (src === null) return "command_router.gd not found";
+      // GDScript aborts a handler on a runtime error and hands back the return
+      // type's default — {} for `-> Dictionary`. Without this guard that travels
+      // out as a successful empty result, which is how every silent failure found
+      // in Milestone 0a reached the caller.
+      if (!/result\.has\("result"\)\s*or\s*result\.has\("error"\)/.test(src)) {
+        return "execute() does not check that the handler returned a result/error shape";
+      }
+      if (!/-32001/.test(src)) return "no distinct error code for an aborted handler";
+      return true;
+    },
+  },
+  {
+    id: "INV-302",
+    task: "0001",
+    desc: "reload_plugin (strips autoloads from project.godot, kills the connection) is not exposed",
+    check() {
+      const manifest = read("server/src/tool-manifest.ts");
+      if (manifest && /"reload_plugin"/.test(manifest)) {
+        return "reload_plugin still present in tool-manifest.ts";
+      }
+      const editor = read("addons/godot_mcp/commands/editor_commands.gd");
+      if (editor && /set_plugin_enabled/.test(editor)) {
+        return "editor_commands.gd still toggles the plugin, which rewrites project.godot";
+      }
+      return true;
+    },
+  },
+  {
+    id: "INV-303",
+    task: "0001",
+    desc: "watch_signals does not bind context arguments ahead of a signal's own payload",
+    check() {
+      const src = read("addons/godot_mcp/services/mcp_runtime_bridge.gd");
+      if (src === null) return "mcp_runtime_bridge.gd not found";
+      // Callable.bind() appends, so binding the emissions array placed it after
+      // the signal's payload; every signal carrying a value was dropped while the
+      // tool still reported success with count 0.
+      if (/_on_signal_emitted\.bind\(/.test(src)) {
+        return "signal capture still uses bind(), which puts the payload into the context parameters";
+      }
+      if (!/class SignalRecorder/.test(src)) {
+        return "no SignalRecorder — signal context must be instance state, not bound arguments";
+      }
+      return true;
+    },
+  },
+  {
+    id: "INV-304",
+    task: "0001",
+    desc: "the editor log tools read the real Output dock rather than a buffer nothing writes",
+    check() {
+      const src = read("addons/godot_mcp/commands/editor_commands.gd");
+      if (src === null) return "editor_commands.gd not found";
+      if (/var _output_buffer/.test(src) && !/EditorLog/.test(src)) {
+        return "still backed by _output_buffer, which had no writer — both tools always reported 'no errors'";
+      }
+      if (!/EditorLog/.test(src)) return "no EditorLog lookup — there is no other source for editor output";
+      if (!/get_parsed_text/.test(src)) return "dock located but its text is never read";
+      return true;
+    },
+  },
+  {
     id: "INV-501",
     task: "T-506",
     desc: "commit.bat (blanket `git add .` + fixed message) is removed",
