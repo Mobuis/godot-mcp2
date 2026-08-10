@@ -59,7 +59,16 @@ func _save_scene(_params: Dictionary) -> Dictionary:
 	var path := root.scene_file_path
 	if path.is_empty():
 		return _err("Scene has no file path — save manually first or use create_scene")
-	editor_plugin.get_editor_interface().save_scene()
+	# Every command runs from a call_deferred, i.e. inside the message-queue
+	# flush, and EditorInterface.save_scene() puts up a progress dialog — which the
+	# engine refuses to do from there ("Do not use progress dialog (task) while
+	# flushing the message queue"). The save still happened, but it logged an error
+	# on every call, and a log that is always red is a log nobody reads. Stepping
+	# to the next frame first leaves the flush and the dialog is allowed.
+	await editor_plugin.get_tree().process_frame
+	var err := editor_plugin.get_editor_interface().save_scene()
+	if err != OK:
+		return _err("Failed to save %s (error %d)" % [path, err])
 	return _ok({"scene_path": path, "saved": true})
 
 
@@ -82,8 +91,28 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	root.free()
 	if err != OK:
 		return _err("Failed to create scene: error %d" % err)
-	editor_plugin.get_editor_interface().open_scene_from_path(scene_path)
-	return _ok({"scene_path": scene_path, "root_type": root_type, "created": true})
+	# Overwriting a scene the editor already has open leaves that tab holding the
+	# *old* contents. The next save_scene then writes the stale version back over
+	# the new file, and in the meantime every node tool operates on a tree the
+	# caller believes it just replaced. Force the open tab to re-read from disk.
+	var ei := editor_plugin.get_editor_interface()
+	var was_open: bool = scene_path in ei.get_open_scenes()
+	if was_open:
+		ei.reload_scene_from_path(scene_path)
+
+	# Opening is the useful default, but it is also what made every scene the MCP
+	# created undeletable: delete_scene refuses while a tab still holds the file.
+	# Callers building throwaway scenes can now opt out.
+	var opened: bool = params.get("open", true)
+	if opened:
+		ei.open_scene_from_path(scene_path)
+	return _ok({
+		"scene_path": scene_path,
+		"root_type": root_type,
+		"created": true,
+		"opened": opened or was_open,
+		"reloaded_open_tab": was_open,
+	})
 
 
 func _play_scene(params: Dictionary) -> Dictionary:
@@ -122,14 +151,36 @@ func _delete_scene(params: Dictionary) -> Dictionary:
 
 	# Deleting a scene the editor still has open leaves it holding an in-memory
 	# copy that can be written back to disk, so the file reappears and the delete
-	# silently does not stick. Godot exposes no API to close a scene tab, so
-	# refuse and say what to do — a delete that quietly undoes itself is worse
-	# than one that declines.
-	if scene_path in editor_plugin.get_editor_interface().get_open_scenes():
-		return _err(
-			"Scene is open in the editor: %s. Close its tab first — deleting it now would leave the editor holding a copy that can be written back to disk." % scene_path,
-			-32003
-		)
+	# silently does not stick.
+	#
+	# The original note here said Godot exposes no way to close a scene tab, and
+	# refused. `EditorInterface.close_scene()` does exist in 4.7 — it closes the
+	# *current* scene — so the tab can be closed properly. Still opt-in: closing a
+	# tab out from under someone is not something to do by default.
+	var ei := editor_plugin.get_editor_interface()
+	if scene_path in ei.get_open_scenes():
+		if not params.get("close_if_open", false):
+			return _err(
+				"Scene is open in the editor: %s. Close its tab first, or pass close_if_open=true — deleting it now would leave the editor holding a copy that can be written back to disk." % scene_path,
+				-32003
+			)
+		if scene_path in ei.get_unsaved_scenes():
+			return _err(
+				"Scene has unsaved changes: %s. Save or discard them before deleting." % scene_path,
+				-32003
+			)
+		# close_scene() acts on whichever scene is current, so bring the target to
+		# the front, close it, then restore whatever was being edited before.
+		var previous := ""
+		var edited := _edited_root()
+		if edited != null:
+			previous = edited.scene_file_path
+		ei.open_scene_from_path(scene_path)
+		ei.close_scene()
+		if not previous.is_empty() and previous != scene_path and FileAccess.file_exists(previous):
+			ei.open_scene_from_path(previous)
+		if scene_path in ei.get_open_scenes():
+			return _err("Could not close the scene tab for %s" % scene_path, -32003)
 
 	var err := DirAccess.remove_absolute(abs_path)
 	if err != OK:
@@ -159,7 +210,7 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_do_method(inst, "set_owner", root)
 	editor_plugin.get_undo_redo().add_undo_method(parent, "remove_child", inst)
 	editor_plugin.get_undo_redo().commit_action()
-	return _ok({"path": str(inst.get_path()), "scene": scene_path})
+	return _ok({"path": _scene_path(inst), "scene": scene_path})
 
 
 func _get_scene_exports(p: Dictionary) -> Dictionary:
