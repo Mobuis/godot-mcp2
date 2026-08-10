@@ -209,7 +209,8 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   { name: "remove_state_machine_state", description: "Remove state from state machine", method: "remove_state_machine_state", params: [{ name: "node_path", type: "string", required: true }, { name: "state_name", type: "string", required: true }] },
   { name: "add_state_machine_transition", description: "Add transition between states", method: "add_state_machine_transition", params: [{ name: "node_path", type: "string", required: true }, { name: "from", type: "string", required: true }, { name: "to", type: "string", required: true }] },
   { name: "remove_state_machine_transition", description: "Remove state transition", method: "remove_state_machine_transition", params: [{ name: "node_path", type: "string", required: true }, { name: "from", type: "string", required: true }, { name: "to", type: "string", required: true }] },
-  { name: "set_blend_tree_node", description: "Configure blend tree nodes", method: "set_blend_tree_node", params: [{ name: "node_path", type: "string", required: true }] },
+  { name: "set_blend_tree_node", description: "Install an AnimationNodeBlendTree as the AnimationTree's root", method: "set_blend_tree_node", params: [{ name: "node_path", type: "string", required: true }] },
+  { name: "set_state_machine_root", description: "Install an AnimationNodeStateMachine as the AnimationTree's root. Required before any add/remove_state_machine_* call.", method: "set_state_machine_root", params: [{ name: "node_path", type: "string", required: true }] },
 
   // Analysis (4)
   { name: "analyze_scene_complexity", description: "Analyze scene performance", method: "analyze_scene_complexity" },
