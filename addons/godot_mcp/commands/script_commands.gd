@@ -119,7 +119,7 @@ func _attach_script(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_undo_method(node, "set_script", node.get_script())
 	editor_plugin.get_undo_redo().commit_action()
 
-	return _ok({"node_path": str(node.get_path()), "script_path": script_path})
+	return _ok({"node_path": _scene_path(node), "script_path": script_path})
 
 
 func _validate_script(params: Dictionary) -> Dictionary:

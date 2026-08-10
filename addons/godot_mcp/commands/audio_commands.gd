@@ -24,7 +24,7 @@ func _add_audio_player(p: Dictionary) -> Dictionary:
 		player.stream = load(stream_path)
 	parent.add_child(player, true)
 	player.owner = _edited_root()
-	return _ok({"path": str(player.get_path())})
+	return _ok({"path": _scene_path(player)})
 
 
 func _add_audio_bus(p: Dictionary) -> Dictionary:

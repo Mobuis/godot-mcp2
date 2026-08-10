@@ -43,6 +43,28 @@ func _norm_res(path: String) -> String:
 	return ResourceUtils.normalize_res(path)
 
 
+## A node's path relative to the edited scene root — the form every tool here
+## accepts as `node_path`.
+##
+## `node.get_path()` on a node in the open scene returns a path rooted in the
+## *editor's* control tree, e.g.
+## `/root/@EditorNode@19513/…/@SubViewportContainer@…/Sandbox/Particles`. The
+## create-style tools returned that, and then every sibling get_*/set_* tool
+## rejected it, because they resolve relative to the scene root. Callers were left
+## having to guess the node's default name.
+func _scene_path(node: Node) -> String:
+	if node == null:
+		return ""
+	var root := _edited_root()
+	if root == null:
+		return str(node.get_path())
+	if node == root:
+		return "."
+	if not root.is_ancestor_of(node):
+		return str(node.get_path())
+	return str(root.get_path_to(node))
+
+
 ## Starting longest-edge cap for returned screenshots. Only a starting point —
 ## SCREENSHOT_MAX_BASE64 is the constraint that actually decides the size.
 const SCREENSHOT_MAX_EDGE := 1024
@@ -299,7 +321,7 @@ func _node_to_dict(node: Node, depth: int = 0, max_depth: int = 8) -> Dictionary
 	var info := {
 		"name": node.name,
 		"type": node.get_class(),
-		"path": str(node.get_path()),
+		"path": _scene_path(node),
 	}
 	if depth < max_depth:
 		var children: Array = []

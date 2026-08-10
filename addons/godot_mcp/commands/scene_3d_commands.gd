@@ -34,7 +34,7 @@ func _add_mesh_instance(p: Dictionary) -> Dictionary:
 	mesh_node.mesh = mesh
 	parent.add_child(mesh_node, true)
 	mesh_node.owner = _edited_root()
-	return _ok({"path": str(mesh_node.get_path())})
+	return _ok({"path": _scene_path(mesh_node)})
 
 
 func _setup_camera_3d(p: Dictionary) -> Dictionary:
@@ -44,7 +44,7 @@ func _setup_camera_3d(p: Dictionary) -> Dictionary:
 	node.fov = float(p.get("fov", node.fov))
 	node.current = p.get("current", node.current)
 	node.position = Vector3(float(p.get("x", node.position.x)), float(p.get("y", node.position.y)), float(p.get("z", node.position.z)))
-	return _ok({"path": str(node.get_path())})
+	return _ok({"path": _scene_path(node)})
 
 
 func _setup_lighting(p: Dictionary) -> Dictionary:
@@ -61,7 +61,7 @@ func _setup_lighting(p: Dictionary) -> Dictionary:
 	light.light_energy = float(p.get("energy", 1.0))
 	parent.add_child(light, true)
 	light.owner = _edited_root()
-	return _ok({"path": str(light.get_path())})
+	return _ok({"path": _scene_path(light)})
 
 
 func _setup_environment(p: Dictionary) -> Dictionary:
@@ -76,7 +76,7 @@ func _setup_environment(p: Dictionary) -> Dictionary:
 	env_node.environment = env
 	parent.add_child(env_node, true)
 	env_node.owner = _edited_root()
-	return _ok({"path": str(env_node.get_path())})
+	return _ok({"path": _scene_path(env_node)})
 
 
 func _add_gridmap(p: Dictionary) -> Dictionary:
@@ -90,7 +90,7 @@ func _add_gridmap(p: Dictionary) -> Dictionary:
 		grid.mesh_library = load(mesh_path)
 	parent.add_child(grid, true)
 	grid.owner = _edited_root()
-	return _ok({"path": str(grid.get_path())})
+	return _ok({"path": _scene_path(grid)})
 
 
 func _set_material_3d(p: Dictionary) -> Dictionary:
@@ -100,4 +100,4 @@ func _set_material_3d(p: Dictionary) -> Dictionary:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = _parse_value(str(p.get("color", "#ffffff")))
 	node.material_override = mat
-	return _ok({"path": str(node.get_path())})
+	return _ok({"path": _scene_path(node)})

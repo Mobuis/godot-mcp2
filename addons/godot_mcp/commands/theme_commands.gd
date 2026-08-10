@@ -112,4 +112,4 @@ func _setup_control(p: Dictionary) -> Dictionary:
 	if p.has("text") and "text" in node:
 		node.text = str(p.get("text"))
 		applied.append("text")
-	return _ok({"node_path": str(node.get_path()), "applied": applied})
+	return _ok({"node_path": _scene_path(node), "applied": applied})

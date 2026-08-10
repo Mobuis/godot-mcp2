@@ -20,7 +20,7 @@ func _create_particles(p: Dictionary) -> Dictionary:
 	particles.name = p.get("name", "Particles")
 	parent.add_child(particles, true)
 	particles.owner = _edited_root()
-	return _ok({"path": str(particles.get_path())})
+	return _ok({"path": _scene_path(particles)})
 
 
 func _set_particle_material(p: Dictionary) -> Dictionary:
@@ -36,7 +36,7 @@ func _set_particle_material(p: Dictionary) -> Dictionary:
 		node.process_material = mat
 	elif node is GPUParticles2D:
 		node.process_material = mat
-	return _ok({"path": str(node.get_path())})
+	return _ok({"path": _scene_path(node)})
 
 
 func _set_particle_color_gradient(p: Dictionary) -> Dictionary:
@@ -51,7 +51,7 @@ func _set_particle_color_gradient(p: Dictionary) -> Dictionary:
 	var mat: ParticleProcessMaterial = node.process_material if "process_material" in node else null
 	if mat:
 		mat.color_ramp = tex
-	return _ok({"path": str(node.get_path())})
+	return _ok({"path": _scene_path(node)})
 
 
 func _apply_particle_preset(p: Dictionary) -> Dictionary:

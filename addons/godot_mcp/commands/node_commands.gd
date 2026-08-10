@@ -53,7 +53,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 		node.set(key, TypeParser.parse(str(properties[key])))
 
 	return _ok({
-		"path": str(node.get_path()),
+		"path": _scene_path(node),
 		"type": node_type,
 		"name": node.name,
 	})
@@ -91,7 +91,7 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_undo_method(parent, "remove_child", dup)
 	editor_plugin.get_undo_redo().commit_action()
 
-	return _ok({"path": str(dup.get_path()), "name": dup.name})
+	return _ok({"path": _scene_path(dup), "name": dup.name})
 
 
 func _move_node(params: Dictionary) -> Dictionary:
@@ -115,7 +115,7 @@ func _move_node(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_undo_method(old_parent, "move_child", node, old_index)
 	editor_plugin.get_undo_redo().commit_action()
 
-	return _ok({"path": str(node.get_path())})
+	return _ok({"path": _scene_path(node)})
 
 
 func _rename_node(params: Dictionary) -> Dictionary:
@@ -133,7 +133,7 @@ func _rename_node(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_undo_property(node, "name", old_name)
 	editor_plugin.get_undo_redo().commit_action()
 
-	return _ok({"path": str(node.get_path()), "name": new_name})
+	return _ok({"path": _scene_path(node), "name": new_name})
 
 
 func _update_property(params: Dictionary) -> Dictionary:
@@ -154,7 +154,7 @@ func _update_property(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().commit_action()
 
 	return _ok({
-		"node_path": str(node.get_path()),
+		"node_path": _scene_path(node),
 		"property": property,
 		"value": _serialize_value(parsed),
 	})
@@ -171,7 +171,7 @@ func _get_node_properties(params: Dictionary) -> Dictionary:
 		if info.usage & PROPERTY_USAGE_EDITOR:
 			var name: String = info.name
 			props[name] = _serialize_value(node.get(name))
-	return _ok({"node_path": str(node.get_path()), "type": node.get_class(), "properties": props})
+	return _ok({"node_path": _scene_path(node), "type": node.get_class(), "properties": props})
 
 
 func _get_signals(params: Dictionary) -> Dictionary:
@@ -192,7 +192,7 @@ func _get_signals(params: Dictionary) -> Dictionary:
 			"name": sig_info.name,
 			"connections": connections,
 		})
-	return _ok({"node_path": str(node.get_path()), "signals": signals_out})
+	return _ok({"node_path": _scene_path(node), "signals": signals_out})
 
 
 func _add_resource(params: Dictionary) -> Dictionary:

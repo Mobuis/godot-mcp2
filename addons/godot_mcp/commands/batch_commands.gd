@@ -35,7 +35,7 @@ func _collect_signals(node: Node, out: Array) -> void:
 	for sig in node.get_signal_list():
 		for conn in node.get_signal_connection_list(sig.name):
 			out.append({
-				"from": str(node.get_path()),
+				"from": _scene_path(node),
 				"signal": sig.name,
 				"to": str(conn.callable.get_object()),
 				"method": conn.callable.get_method(),
@@ -180,7 +180,7 @@ func _batch_add_nodes(p: Dictionary) -> Dictionary:
 		editor_plugin.get_undo_redo().commit_action()
 		for key in entry.get("properties", {}):
 			node.set(str(key), _parse_value(str(entry["properties"][key])))
-		created.append({"index": i, "path": str(node.get_path()), "type": node_type})
+		created.append({"index": i, "path": _scene_path(node), "type": node_type})
 	return _ok({"created": created, "count": created.size(), "errors": errors})
 
 

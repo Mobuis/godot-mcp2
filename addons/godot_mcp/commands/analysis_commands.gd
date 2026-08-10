@@ -38,7 +38,7 @@ func _analyze_signal_flow(_p: Dictionary) -> Dictionary:
 func _collect_all_signals(node: Node, out: Array) -> void:
 	for sig in node.get_signal_list():
 		for conn in node.get_signal_connection_list(sig.name):
-			out.append({"from": str(node.get_path()), "signal": sig.name, "to": str(conn.callable.get_object())})
+			out.append({"from": _scene_path(node), "signal": sig.name, "to": str(conn.callable.get_object())})
 	for child in node.get_children():
 		_collect_all_signals(child, out)
 
