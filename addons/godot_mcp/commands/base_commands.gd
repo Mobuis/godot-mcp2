@@ -306,6 +306,15 @@ func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dicti
 	return _err("Screenshot capture failed")
 
 
+## Marks the edited scene unsaved after a change made without UndoRedo.
+## Otherwise the editor does not know it changed: reload_project would discard it
+## and closing the editor would not prompt to save.
+func _mark_unsaved() -> void:
+	var ei := editor_plugin.get_editor_interface()
+	if ei.has_method("mark_scene_as_unsaved"):
+		ei.mark_scene_as_unsaved()
+
+
 func _undo_property(node: Object, property: String, new_value: Variant) -> void:
 	var undo_redo := editor_plugin.get_undo_redo()
 	undo_redo.create_action("MCP Set %s" % property)

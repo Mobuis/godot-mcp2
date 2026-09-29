@@ -89,6 +89,7 @@ func _assign_shader_material(p: Dictionary) -> Dictionary:
 	# Confirm the assignment landed rather than assuming it did.
 	if _shader_material_on(node) != mat:
 		return _err("Assignment to %s.%s did not take" % [node.get_class(), slot])
+	_mark_unsaved()
 	return _ok({"node_path": _scene_path(node), "slot": slot, "shader_path": shader_path})
 
 
@@ -101,6 +102,7 @@ func _set_shader_param(p: Dictionary) -> Dictionary:
 		return _err("No ShaderMaterial on %s (checked '%s'). Call assign_shader_material first." % [node.get_class(), _material_slot(node)])
 	var param := str(p.get("param", ""))
 	mat.set_shader_parameter(param, _parse_value(str(p.get("value", ""))))
+	_mark_unsaved()
 	return _ok({"param": param, "value": str(mat.get_shader_parameter(param))})
 
 

@@ -220,6 +220,7 @@ func _add_resource(params: Dictionary) -> Dictionary:
 		node.texture = res
 	else:
 		return _err("Cannot auto-assign %s to %s" % [resource_type, node.get_class()])
+	_mark_unsaved()
 	return _ok({"node_path": node_path, "resource_type": resource_type})
 
 
@@ -238,6 +239,7 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 	if not preset_map.has(preset_name):
 		return _err("Unknown preset: %s" % preset_name)
 	node.set_anchors_preset(preset_map[preset_name])
+	_mark_unsaved()
 	return _ok({"node_path": node_path, "preset": preset_name})
 
 
@@ -321,6 +323,7 @@ func _set_node_groups(params: Dictionary) -> Dictionary:
 		node.remove_from_group(g)
 	for g in groups:
 		node.add_to_group(str(g))
+	_mark_unsaved()
 	return _ok({"groups": groups})
 
 

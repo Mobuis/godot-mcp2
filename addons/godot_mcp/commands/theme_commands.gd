@@ -27,6 +27,7 @@ func _set_theme_color(p: Dictionary) -> Dictionary:
 	if node == null or not node is Control:
 		return _err("Control node required")
 	node.add_theme_color_override(str(p.get("name", "")), _parse_value(str(p.get("color", "#ffffff"))))
+	_mark_unsaved()
 	return _ok({"set": p.get("name", "")})
 
 
@@ -35,6 +36,7 @@ func _set_theme_constant(p: Dictionary) -> Dictionary:
 	if node == null or not node is Control:
 		return _err("Control node required")
 	node.add_theme_constant_override(str(p.get("name", "")), int(p.get("value", 0)))
+	_mark_unsaved()
 	return _ok({"set": p.get("name", "")})
 
 
@@ -43,6 +45,7 @@ func _set_theme_font_size(p: Dictionary) -> Dictionary:
 	if node == null or not node is Control:
 		return _err("Control node required")
 	node.add_theme_font_size_override(str(p.get("name", "")), int(p.get("size", 16)))
+	_mark_unsaved()
 	return _ok({"set": p.get("name", "")})
 
 
@@ -53,6 +56,7 @@ func _set_theme_stylebox(p: Dictionary) -> Dictionary:
 	var style := StyleBoxFlat.new()
 	style.bg_color = _parse_value(str(p.get("color", "#333333")))
 	node.add_theme_stylebox_override(str(p.get("name", "panel")), style)
+	_mark_unsaved()
 	return _ok({"set": p.get("name", "panel")})
 
 
@@ -112,4 +116,6 @@ func _setup_control(p: Dictionary) -> Dictionary:
 	if p.has("text") and "text" in node:
 		node.text = str(p.get("text"))
 		applied.append("text")
+	if not applied.is_empty():
+		_mark_unsaved()
 	return _ok({"node_path": _scene_path(node), "applied": applied})

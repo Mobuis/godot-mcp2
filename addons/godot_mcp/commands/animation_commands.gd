@@ -47,6 +47,7 @@ func _create_animation(p: Dictionary) -> Dictionary:
 	library.add_animation(anim_name, anim)
 	if not player.has_animation(anim_name):
 		return _err("Animation '%s' was not registered on %s" % [anim_name, player.name])
+	_mark_unsaved()
 	return _ok({"animation": anim_name, "length": anim.length})
 
 
@@ -76,6 +77,7 @@ func _add_animation_track(p: Dictionary) -> Dictionary:
 			anim.track_set_path(idx, path)
 		_:
 			return _err("Unknown track_type")
+	_mark_unsaved()
 	return _ok({"track_index": idx})
 
 
@@ -88,6 +90,7 @@ func _set_animation_keyframe(p: Dictionary) -> Dictionary:
 	var time: float = float(p.get("time", 0.0))
 	var value = _parse_value(str(p.get("value", "0")))
 	anim.track_insert_key(track, time, value)
+	_mark_unsaved()
 	return _ok({"track": track, "time": time})
 
 
@@ -115,5 +118,9 @@ func _remove_animation(p: Dictionary) -> Dictionary:
 	var anim_name: String = p.get("animation", "")
 	if player == null:
 		return _err("AnimationPlayer not found")
-	player.get_animation_library("").remove_animation(anim_name)
+	var library := player.get_animation_library("")
+	if library == null or not library.has_animation(anim_name):
+		return _err("Animation not found: %s" % anim_name)
+	library.remove_animation(anim_name)
+	_mark_unsaved()
 	return _ok({"removed": anim_name})

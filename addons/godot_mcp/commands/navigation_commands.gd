@@ -29,6 +29,7 @@ func _setup_navigation_region(p: Dictionary) -> Dictionary:
 		region.navigation_polygon = NavigationPolygon.new()
 	parent.add_child(region, true)
 	region.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"path": _scene_path(region), "has_mesh": true})
 
 
@@ -42,6 +43,7 @@ func _setup_navigation_agent(p: Dictionary) -> Dictionary:
 		agent.max_speed = float(p.get("max_speed", 5.0))
 	parent.add_child(agent, true)
 	agent.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"path": _scene_path(agent)})
 
 
@@ -61,6 +63,7 @@ func _bake_navigation_mesh(p: Dictionary) -> Dictionary:
 		node.bake_navigation_polygon()
 	else:
 		return _err("NavigationRegion node required, got %s" % node.get_class())
+	_mark_unsaved()
 	return _ok({"baked": true, "node_path": _scene_path(node)})
 
 
@@ -70,6 +73,7 @@ func _set_navigation_layers(p: Dictionary) -> Dictionary:
 		return _err("Node not found")
 	if "navigation_layers" in node:
 		node.navigation_layers = int(p.get("layers", 1))
+	_mark_unsaved()
 	return _ok({"layers": p.get("layers", 1)})
 
 

@@ -45,6 +45,7 @@ func _set_state_machine_root(p: Dictionary) -> Dictionary:
 	if tree == null:
 		return _err("AnimationTree not found at '%s'" % p.get("node_path", ""))
 	tree.tree_root = AnimationNodeStateMachine.new()
+	_mark_unsaved()
 	return _ok({"tree_root": "AnimationNodeStateMachine", "node_path": p.get("node_path", "")})
 
 
@@ -59,6 +60,7 @@ func _create_animation_tree(p: Dictionary) -> Dictionary:
 		tree.anim_player = NodePath(player_path)
 	parent.add_child(tree, true)
 	tree.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"path": _scene_path(tree)})
 
 
@@ -89,6 +91,7 @@ func _set_tree_parameter(p: Dictionary) -> Dictionary:
 		return _err("AnimationTree not found")
 	var param: String = p.get("parameter", "")
 	tree.set(param, _parse_value(str(p.get("value", "0"))))
+	_mark_unsaved()
 	return _ok({"parameter": param})
 
 
@@ -103,6 +106,7 @@ func _add_state_machine_state(p: Dictionary) -> Dictionary:
 	if not anim_name.is_empty():
 		anim_node.animation = anim_name
 	sm.add_node(state_name, anim_node)
+	_mark_unsaved()
 	return _ok({"state": state_name, "states": sm.get_node_list()})
 
 
@@ -115,6 +119,7 @@ func _remove_state_machine_state(p: Dictionary) -> Dictionary:
 	if not sm.has_node(state_name):
 		return _err("No such state: '%s'. States: %s" % [state_name, sm.get_node_list()])
 	sm.remove_node(state_name)
+	_mark_unsaved()
 	return _ok({"removed": state_name, "states": sm.get_node_list()})
 
 
@@ -129,6 +134,7 @@ func _add_state_machine_transition(p: Dictionary) -> Dictionary:
 		if not sm.has_node(state):
 			return _err("No such state: '%s'. States: %s" % [state, sm.get_node_list()])
 	sm.add_transition(from_state, to_state, AnimationNodeStateMachineTransition.new())
+	_mark_unsaved()
 	return _ok({"from": from_state, "to": to_state, "transition_count": sm.get_transition_count()})
 
 
@@ -142,6 +148,7 @@ func _remove_state_machine_transition(p: Dictionary) -> Dictionary:
 	if not sm.has_transition(from_state, to_state):
 		return _err("No transition '%s' -> '%s'" % [from_state, to_state])
 	sm.remove_transition(from_state, to_state)
+	_mark_unsaved()
 	return _ok({"removed": true, "transition_count": sm.get_transition_count()})
 
 
@@ -151,4 +158,5 @@ func _set_blend_tree_node(p: Dictionary) -> Dictionary:
 		return _err("AnimationTree not found")
 	var blend := AnimationNodeBlendTree.new()
 	tree.tree_root = blend
+	_mark_unsaved()
 	return _ok({"blend_tree": true, "note": "Created new BlendTree root"})

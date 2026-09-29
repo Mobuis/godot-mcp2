@@ -22,6 +22,7 @@ func _setup_physics_body(p: Dictionary) -> Dictionary:
 		node.mass = float(p.get("mass", 1.0))
 	if "lock_rotation" in node:
 		node.lock_rotation = p.get("lock_rotation", false)
+	_mark_unsaved()
 	return _ok({"node_path": _scene_path(node)})
 
 
@@ -47,6 +48,7 @@ func _setup_collision(p: Dictionary) -> Dictionary:
 			col.shape = box
 			node.add_child(col, true)
 			col.owner = _edited_root()
+			_mark_unsaved()
 			return _ok({"added": "CollisionShape3D"})
 	if shape and node is CollisionShape2D:
 		node.shape = shape
@@ -55,6 +57,7 @@ func _setup_collision(p: Dictionary) -> Dictionary:
 		col.shape = shape
 		node.add_child(col, true)
 		col.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"shape": shape_type})
 
 
@@ -66,6 +69,7 @@ func _set_physics_layers(p: Dictionary) -> Dictionary:
 		node.collision_layer = int(p.get("layer", node.collision_layer))
 	if "collision_mask" in node:
 		node.collision_mask = int(p.get("mask", node.collision_mask))
+	_mark_unsaved()
 	return _ok({"node_path": _scene_path(node)})
 
 
@@ -117,4 +121,5 @@ func _add_raycast(p: Dictionary) -> Dictionary:
 	ray.name = p.get("name", "RayCast")
 	parent.add_child(ray, true)
 	ray.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"path": _scene_path(ray)})

@@ -23,6 +23,7 @@ func _tilemap_set_cell(p: Dictionary) -> Dictionary:
 		return _err("TileMapLayer not found")
 	var coords := Vector2i(int(p.get("x", 0)), int(p.get("y", 0)))
 	layer.set_cell(coords, int(p.get("source", 0)), Vector2i(int(p.get("atlas_x", 0)), int(p.get("atlas_y", 0))))
+	_mark_unsaved()
 	return _ok({"cell": coords})
 
 
@@ -37,6 +38,7 @@ func _tilemap_fill_rect(p: Dictionary) -> Dictionary:
 	for x in range(rect.position.x, rect.position.x + rect.size.x):
 		for y in range(rect.position.y, rect.position.y + rect.size.y):
 			layer.set_cell(Vector2i(x, y), int(p.get("source", 0)), Vector2i(int(p.get("atlas_x", 0)), int(p.get("atlas_y", 0))))
+	_mark_unsaved()
 	return _ok({"filled": rect})
 
 
@@ -55,6 +57,7 @@ func _tilemap_clear(p: Dictionary) -> Dictionary:
 	if layer == null:
 		return _err("TileMapLayer not found")
 	layer.clear()
+	_mark_unsaved()
 	return _ok({"cleared": true})
 
 

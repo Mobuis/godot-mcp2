@@ -3,6 +3,9 @@ extends "res://addons/godot_mcp/commands/base_commands.gd"
 
 var _output_label: RichTextLabel = null
 
+## Real-time ceiling for reload_project's wait, under the server's 45 s timeout.
+const RELOAD_DEADLINE_SEC := 30.0
+
 func get_commands() -> Dictionary:
 	return {
 		"get_editor_errors": _get_editor_errors,
@@ -180,12 +183,37 @@ func _reload_commands(_params: Dictionary) -> Dictionary:
 	})
 
 
-func _reload_project(_params: Dictionary) -> Dictionary:
-	editor_plugin.get_editor_interface().get_resource_filesystem().scan()
-	editor_plugin.get_editor_interface().reload_scene_from_path(
-		_edited_root().scene_file_path if _edited_root() else ""
-	)
-	return _ok({"reloaded": true})
+## Scans, waits until the scan and the reimport are done, then reloads the
+## scene. Polls because `resources_reimported` never fires when nothing needed
+## importing. The reload is skipped when the scene has unsaved changes, since
+## reload_scene_from_path() discards them; only changes the editor tracks
+## (UndoRedo or _mark_unsaved()) are seen.
+func _reload_project(params: Dictionary) -> Dictionary:
+	var ei := editor_plugin.get_editor_interface()
+	var fs := ei.get_resource_filesystem()
+	var wait: bool = bool(params.get("wait", true))
+	var started := Time.get_ticks_msec()
+	fs.scan()
+	if wait:
+		# The scan starts on the next step and hands over to the importer at its end,
+		# so idle must hold for a few consecutive polls.
+		var deadline := started + int(RELOAD_DEADLINE_SEC * 1000.0)
+		var idle_polls := 0
+		while idle_polls < 3:
+			if Time.get_ticks_msec() >= deadline:
+				return _err("The filesystem scan or reimport is still running after %d s. It continues in the editor; the scene was not reloaded. Call reload_project again to wait for it." % int(RELOAD_DEADLINE_SEC), -32011)
+			await editor_plugin.get_tree().create_timer(0.1).timeout
+			idle_polls = idle_polls + 1 if not (fs.is_scanning() or fs.is_importing()) else 0
+	var result := {"scan": "finished" if wait else "started", "waited": wait, "scan_ms": Time.get_ticks_msec() - started, "scene_reloaded": false}
+	var root := _edited_root()
+	if root == null or root.scene_file_path.is_empty():
+		return _ok(result)
+	if root.scene_file_path in ei.get_unsaved_scenes():
+		result["note"] = "The scene %s has unsaved changes, so it was not reloaded (reloading discards them). Save it, then call reload_project again." % root.scene_file_path
+		return _ok(result)
+	ei.reload_scene_from_path(root.scene_file_path)
+	result["scene_reloaded"] = true
+	return _ok(result)
 
 
 ## The editor 3D viewport's camera.

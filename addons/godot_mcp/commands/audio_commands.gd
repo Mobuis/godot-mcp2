@@ -24,6 +24,7 @@ func _add_audio_player(p: Dictionary) -> Dictionary:
 		player.stream = load(stream_path)
 	parent.add_child(player, true)
 	player.owner = _edited_root()
+	_mark_unsaved()
 	return _ok({"path": _scene_path(player)})
 
 
