@@ -277,8 +277,7 @@ func _set_editor_camera(params: Dictionary) -> Dictionary:
 		float(params.get("rotation_z", current_euler.z))
 	)
 	cam.global_transform = Transform3D(Basis.from_euler(rot), pos)
-	if params.has("fov"):
-		cam.fov = float(params.get("fov"))
+	# No fov: the editor viewport re-applies its own field of view every frame.
 	# Report what the camera actually holds afterwards, not what we asked for.
 	return _ok(_camera_info(idx, cam))
 

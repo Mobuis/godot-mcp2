@@ -106,15 +106,25 @@ func _click_button_by_text(p: Dictionary) -> Dictionary:
 	return await _runtime_call("click_button", {"text": p.get("text", "")})
 
 
+## Polls the game until the node exists. The deadline is real time: the game
+## answers at once, so counting polls as seconds gave up almost immediately.
+## Capped below the server's 45 s timeout.
 func _wait_for_node(p: Dictionary) -> Dictionary:
-	var timeout: float = float(p.get("timeout", 5.0))
-	var elapsed := 0.0
-	while elapsed < timeout:
+	var timeout := clampf(float(p.get("timeout", 5.0)), 0.0, WAIT_FOR_NODE_MAX_SEC)
+	var deadline := Time.get_ticks_msec() + int(timeout * 1000.0)
+	while true:
 		var res := await _runtime_call("wait_for_node", {"node_path": p.get("node_path", "")}, 1.0)
-		if res.has("result") and res["result"].get("found", false):
+		if res.has("error"):
 			return res
-		elapsed += 1.0
-	return _err("Node did not appear in time")
+		if res["result"].get("found", false):
+			return res
+		if Time.get_ticks_msec() >= deadline:
+			break
+		await editor_plugin.get_tree().create_timer(0.2).timeout
+	return _err("Node did not appear within %.1f s" % timeout)
+
+
+const WAIT_FOR_NODE_MAX_SEC := 30.0
 
 
 func _find_nearby_nodes(p: Dictionary) -> Dictionary:
