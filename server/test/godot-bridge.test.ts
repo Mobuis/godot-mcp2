@@ -179,6 +179,113 @@ describe("T-202 — server error handling", () => {
   });
 });
 
+// ------------------------------------------------------ bind failure/retry ---
+describe("port held by another process", () => {
+  async function withRetryMs(ms: string, body: () => Promise<void>) {
+    const prev = process.env.GODOT_MCP_BIND_RETRY_MS;
+    process.env.GODOT_MCP_BIND_RETRY_MS = ms;
+    try {
+      await body();
+    } finally {
+      if (prev === undefined) delete process.env.GODOT_MCP_BIND_RETRY_MS;
+      else process.env.GODOT_MCP_BIND_RETRY_MS = prev;
+    }
+  }
+
+  const hold = async (p: number) => {
+    const holder = new WebSocketServer({ port: p, host: "127.0.0.1" });
+    await new Promise((r) => holder.once("listening", r));
+    return holder;
+  };
+  const release = (holder: WebSocketServer) =>
+    new Promise<void>((r) => holder.close(() => r()));
+
+  it("call() names the port instead of blaming the editor connection", async () => {
+    const p = port();
+    const holder = await hold(p);
+    try {
+      const b = makeBridge(p);
+      b.start();
+      await settle(200);
+
+      const err = await b.call("get_project_info").catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain(String(p));
+      expect((err as Error).message).toMatch(/in use/i);
+      expect((err as Error).message).not.toMatch(/not connected/i);
+    } finally {
+      await release(holder);
+    }
+  });
+
+  it("takes the port over once the other holder closes, and then serves calls", async () => {
+    await withRetryMs("100", async () => {
+      const p = port();
+      const holder = await hold(p);
+      const b = makeBridge(p);
+      b.start();
+      await settle(200);
+      await expect(b.call("x")).rejects.toThrow(/in use/i);
+
+      await release(holder);
+      await settle(400); // several retry intervals
+
+      const ws = await connect(p);
+      autoRespond(ws, { ok: true });
+      await expect(b.call("get_project_info")).resolves.toEqual({ ok: true });
+    });
+  });
+
+  it("keeps the 'not connected' message once bound with no editor attached", async () => {
+    await withRetryMs("100", async () => {
+      const p = port();
+      const holder = await hold(p);
+      const b = makeBridge(p);
+      b.start();
+      await settle(200);
+      await release(holder);
+      await settle(400);
+
+      await expect(b.call("x")).rejects.toThrow(/not connected/i);
+    });
+  });
+
+  it("logs the failure once per streak, not on every retry", async () => {
+    await withRetryMs("50", async () => {
+      const p = port();
+      const holder = await hold(p);
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const b = makeBridge(p);
+        b.start();
+        await settle(400); // roughly 8 failed attempts
+        const failures = log.mock.calls.filter((c) => /could not listen/.test(String(c[0])));
+        expect(failures).toHaveLength(1);
+      } finally {
+        log.mockRestore();
+        await release(holder);
+      }
+    });
+  });
+
+  it("close() stops retrying", async () => {
+    await withRetryMs("100", async () => {
+      const p = port();
+      const holder = await hold(p);
+      const b = makeBridge(p);
+      b.start();
+      await settle(200);
+
+      b.close();
+      await release(holder);
+      await settle(400);
+
+      // A retry after close() would have bound the port.
+      await expect(connect(p)).rejects.toThrow();
+    });
+  });
+});
+
 // --------------------------------------------------------- T-203 timeouts ---
 describe("T-203 — request timeout", () => {
   it("is configurable via GODOT_MCP_TIMEOUT_MS", async () => {

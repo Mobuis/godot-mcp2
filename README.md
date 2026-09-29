@@ -19,7 +19,7 @@ AI client  ←—stdio/MCP—→  Node.js server  ←—WebSocket:6505—→  Go
 
 - **UndoRedo integration** — node add/remove/edit and property changes go through the editor undo stack
 - **Smart type parsing** — strings like `Vector2(100, 200)`, `#ff0000`, `Color(1,0,0)` are converted automatically
-- **Reconnect with backoff** — exponential backoff on the plugin side (1s → 60s)
+- **Reconnect with backoff** — exponential backoff on the plugin side (1s → 5s), and a stalled handshake is dropped after 5s
 - **Heartbeat** — bidirectional ping/pong to keep the WebSocket alive
 - **JSON-RPC 2.0** — standard protocol between the Godot plugin and the Node.js server
 
@@ -229,6 +229,7 @@ See also [`.mcp.json.example`](.mcp.json.example) in the repo.
 | `GODOT_MCP_PORT` | `6505` | Port for the loopback WebSocket server |
 | `GODOT_MCP_TIMEOUT_MS` | `45000` | Per-request timeout. A few known-slow tools (e.g. `bake_navigation_mesh`) declare a higher floor in `tool-manifest.ts`; the effective timeout is the larger of the two, so raising this never shortens them |
 | `GODOT_MCP_HEARTBEAT_MS` | `10000` | Ping interval. A peer that answers nothing for a full interval is terminated |
+| `GODOT_MCP_BIND_RETRY_MS` | `3000` | How often to retry listening while another process (usually another MCP session) holds the port. Until the bind succeeds, every tool call fails with an error that names the port |
 
 Non-positive or non-numeric values fall back to the default.
 

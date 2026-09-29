@@ -128,6 +128,18 @@ for their absence as a problem.
 - **The Godot plugin trusts the server completely.** It executes any method the
   router knows about. The `Origin` check and the single-client rule are what
   stand between that and an untrusted peer.
+- **The plugin does not check which server it reaches.** Those two guards live in
+  the MCP server, so they only apply when that server holds the port. Any local
+  process that listens on 6505 first (or on `GODOT_MCP_PORT`) receives the
+  plugin's connection and can drive the editor, which means running code through
+  a `@tool` script. Nothing distinguishes it from the real server. The
+  `GODOT_MCP_TOKEN` fix above closes this too, provided the plugin also refuses
+  a server that does not prove it knows the token.
+
+Supporting several MCP sessions at once, for example through a registry file of
+ports the plugin connects to, is not built. If it ever is, the plugin must accept
+only `127.0.0.1` entries and require the token above: otherwise anything that can
+write the registry gets the editor.
 
 ---
 

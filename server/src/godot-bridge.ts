@@ -3,6 +3,9 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const DEFAULT_PORT = 6505;
 const DEFAULT_HEARTBEAT_MS = 10_000;
+// Bind retry interval, so a server that lost the port takes over when
+// the other MCP session ends.
+const DEFAULT_BIND_RETRY_MS = 3_000;
 // T-203: was 30s, which is too tight for a navmesh bake. It was then raised to
 // 120s, which was worse: MCP clients default to a 60s request timeout, so the
 // client always gave up first and this timeout never fired. The server's error
@@ -34,21 +37,53 @@ export class GodotBridge {
   private nextId = 1;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private isAlive = false;
+  private started = false;
+  // Why the last bind failed, or null while bound. call() reports it
+  // because the agent never sees stderr.
+  private bindFailure: string | null = null;
+  private bindRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly port: number;
   private readonly timeoutMs: number;
   private readonly heartbeatMs: number;
+  private readonly bindRetryMs: number;
 
   constructor(port = Number(process.env.GODOT_MCP_PORT ?? DEFAULT_PORT)) {
     this.port = port;
     this.timeoutMs = envInt("GODOT_MCP_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
     this.heartbeatMs = envInt("GODOT_MCP_HEARTBEAT_MS", DEFAULT_HEARTBEAT_MS);
+    this.bindRetryMs = envInt("GODOT_MCP_BIND_RETRY_MS", DEFAULT_BIND_RETRY_MS);
   }
 
   start(): void {
-    if (this.wss) return;
+    if (this.started) return;
+    this.started = true;
+    this.listen();
 
-    this.wss = new WebSocketServer({
+    // T-204: ping/pong as liveness detection, not just keepalive.
+    // Created here, not in listen(): a bind retry must not add a second timer.
+    this.heartbeatTimer = setInterval(() => {
+      const ws = this.client;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      if (!this.isAlive) {
+        console.error("[godot-mcp] peer missed heartbeat; terminating");
+        ws.terminate();
+        if (this.client === ws) {
+          this.client = null;
+          this.rejectAll(new Error("Godot editor stopped responding"));
+        }
+        return;
+      }
+
+      this.isAlive = false;
+      ws.send(JSON.stringify({ jsonrpc: "2.0", method: "ping", params: {} }));
+    }, this.heartbeatMs);
+  }
+
+  /** One bind attempt. Only called while this.wss is null. */
+  private listen(): void {
+    const wss = new WebSocketServer({
       port: this.port,
       host: "127.0.0.1",
       // T-103: browsers always send Origin on a WS handshake; Godot's
@@ -63,20 +98,47 @@ export class GodotBridge {
       },
     });
 
-    // T-202: EADDRINUSE and friends must not be fatal.
-    this.wss.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
-        console.error(
-          `[godot-mcp] port ${this.port} is already in use. Another MCP server or Godot ` +
-            `instance is probably running. Set GODOT_MCP_PORT to use a different port.`
-        );
-      } else {
-        console.error("[godot-mcp] websocket server error:", err.message);
-      }
-      this.wss = null;
+    this.wss = wss;
+
+    // Logged on the event: the bind is asynchronous and may still fail.
+    wss.on("listening", () => {
+      if (this.wss !== wss) return;
+      const recovered = this.bindFailure !== null;
+      this.bindFailure = null;
+      console.error(
+        `[godot-mcp] WebSocket server listening on ws://127.0.0.1:${this.port}` +
+          (recovered ? " (the port is free again)" : "")
+      );
     });
 
-    this.wss.on("connection", (ws) => {
+    // T-202: EADDRINUSE and friends must not be fatal.
+    wss.on("error", (err: NodeJS.ErrnoException) => {
+      // Ignore errors from a server that close() or a newer attempt replaced.
+      if (this.wss !== wss) return;
+
+      const firstOfStreak = this.bindFailure === null;
+      this.bindFailure =
+        err.code === "EADDRINUSE"
+          ? `This MCP server could not listen on port ${this.port}: it is in use, ` +
+            `probably by another MCP session. Close that session, or set GODOT_MCP_PORT.`
+          : `This MCP server could not listen on port ${this.port}: ${err.message}. ` +
+            `Set GODOT_MCP_PORT to use a different port.`;
+      // Once per failure streak, not on every retry.
+      if (firstOfStreak) {
+        console.error(
+          `[godot-mcp] ${this.bindFailure} Retrying every ${this.bindRetryMs}ms.`
+        );
+      }
+
+      // Drop the dead server so a retry never leaves two.
+      this.wss = null;
+      try {
+        wss.close();
+      } catch {}
+      this.scheduleBindRetry();
+    });
+
+    wss.on("connection", (ws) => {
       // T-103: do not let a newcomer displace a healthy existing client.
       // Last-write-wins let anything that could complete a handshake take over
       // the channel and feed forged tool results back to the agent.
@@ -101,27 +163,14 @@ export class GodotBridge {
       });
       ws.on("error", () => ws.close());
     });
+  }
 
-    // T-204: ping/pong as liveness detection, not just keepalive.
-    this.heartbeatTimer = setInterval(() => {
-      const ws = this.client;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-      if (!this.isAlive) {
-        console.error("[godot-mcp] peer missed heartbeat; terminating");
-        ws.terminate();
-        if (this.client === ws) {
-          this.client = null;
-          this.rejectAll(new Error("Godot editor stopped responding"));
-        }
-        return;
-      }
-
-      this.isAlive = false;
-      ws.send(JSON.stringify({ jsonrpc: "2.0", method: "ping", params: {} }));
-    }, this.heartbeatMs);
-
-    console.error(`[godot-mcp] WebSocket server listening on ws://127.0.0.1:${this.port}`);
+  private scheduleBindRetry(): void {
+    if (!this.started || this.bindRetryTimer) return;
+    this.bindRetryTimer = setTimeout(() => {
+      this.bindRetryTimer = null;
+      if (this.started && !this.wss) this.listen();
+    }, this.bindRetryMs);
   }
 
   get connected(): boolean {
@@ -142,6 +191,7 @@ export class GodotBridge {
     toolTimeoutMs?: number
   ): Promise<unknown> {
     if (!this.connected || !this.client) {
+      if (this.bindFailure) throw new Error(this.bindFailure);
       throw new Error(
         "Godot editor not connected. Open your project in Godot and enable the Godot MCP plugin."
       );
@@ -170,6 +220,12 @@ export class GodotBridge {
   }
 
   close(): void {
+    this.started = false;
+    this.bindFailure = null;
+    if (this.bindRetryTimer) {
+      clearTimeout(this.bindRetryTimer);
+      this.bindRetryTimer = null;
+    }
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

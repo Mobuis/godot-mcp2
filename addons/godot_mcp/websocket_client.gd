@@ -11,7 +11,12 @@ var command_router: Node
 
 const DEFAULT_PORT := 6505
 const RECONNECT_BASE_SEC := 1.0
-const RECONNECT_MAX_SEC := 60.0
+## Kept short so a new MCP server is found within seconds, even after the
+## editor waited a long time. A refused loopback connect costs next to nothing.
+const RECONNECT_MAX_SEC := 5.0
+## A peer that accepts TCP but never completes the handshake would otherwise keep
+## the client in STATE_CONNECTING forever.
+const CONNECT_TIMEOUT_SEC := 5.0
 const PING_INTERVAL_SEC := 10.0
 const BUFFER_SIZE := 8 * 1024 * 1024
 
@@ -20,6 +25,7 @@ var _peer: WebSocketPeer
 var _is_connected := false
 var _reconnect_delay := RECONNECT_BASE_SEC
 var _reconnect_timer := 0.0
+var _connecting_time := 0.0
 var _ping_timer := 0.0
 var _running := false
 
@@ -77,7 +83,13 @@ func _process(delta: float) -> void:
 				print("[Godot MCP] Disconnected from MCP server")
 			_peer = null
 			_schedule_reconnect()
-		WebSocketPeer.STATE_CLOSING, WebSocketPeer.STATE_CONNECTING:
+		WebSocketPeer.STATE_CONNECTING:
+			_connecting_time += delta
+			if _connecting_time >= CONNECT_TIMEOUT_SEC:
+				_peer.close()
+				_peer = null
+				_schedule_reconnect()
+		WebSocketPeer.STATE_CLOSING:
 			pass
 
 
@@ -88,6 +100,7 @@ func _try_connect() -> void:
 	var err := ws.connect_to_url("ws://127.0.0.1:%d" % _port)
 	if err == OK:
 		_peer = ws
+		_connecting_time = 0.0
 	else:
 		_peer = null
 		_schedule_reconnect()
