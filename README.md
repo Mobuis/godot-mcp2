@@ -12,7 +12,7 @@ AI client  ←—stdio/MCP—→  Node.js server  ←—WebSocket:6505—→  Go
 |-----------|------|
 | **Godot plugin** | WebSocket client that receives JSON-RPC requests and executes commands via editor APIs |
 | **Node.js MCP server** | Speaks stdio to AI clients; runs a WebSocket server (default port 6505) to forward tool calls |
-| **Command router** | `command_router.gd` aggregates 20 command modules with **156** handlers |
+| **Command router** | `command_router.gd` aggregates 20 command modules with **159** handlers |
 | **Runtime services** | 3 autoloads (`MCPRuntimeBridge` / `MCPInputBridge` / `MCPScreenshotBridge`) use `user://` IPC for in-game inspection, input simulation, and screenshots. They free themselves on `_ready()` unless `OS.has_feature("editor")`, so they do not run in exported builds |
 
 ### Core features
@@ -25,7 +25,7 @@ AI client  ←—stdio/MCP—→  Node.js server  ←—WebSocket:6505—→  Go
 
 ## Tool categories
 
-**156 MCP tools** across **20 categories**:
+**159 MCP tools** across **20 categories**:
 
 | Category | Tools | Highlights |
 |----------|-------|------------|
@@ -33,9 +33,9 @@ AI client  ←—stdio/MCP—→  Node.js server  ←—WebSocket:6505—→  Go
 | Scene | 10 | Scene tree, create/delete/instance scenes, play/stop, `@export` variables |
 | Node | 14 | CRUD, properties, signals, groups, resource attachment |
 | Script | 8 | Script CRUD, attach, validation, full-text search |
-| Editor | 11 | Editor/game screenshots, camera control, error log, screenshot diff |
+| Editor | 12 | Editor/game screenshots, camera control, error log, screenshot diff |
 | Input | 7 | Keyboard/mouse/action simulation, input map (incl. deadzone) |
-| Runtime | 18 | In-game scene tree, properties, signal watching, record/replay, UI clicks, navigation |
+| Runtime | 19 | In-game scene tree, properties, signal watching, record/replay, UI clicks, navigation |
 | Animation | 6 | Tracks, keyframes, AnimationPlayer CRUD |
 | TileMap | 6 | Cell read/write, rect fill, used-cell queries |
 | Theme/UI | 7 | Theme creation, Control layout, color/font/StyleBox overrides |
@@ -47,7 +47,7 @@ AI client  ←—stdio/MCP—→  Node.js server  ←—WebSocket:6505—→  Go
 | Particle | 5 | GPU particles, materials, gradients, presets (fire/smoke/spark) |
 | Navigation | 6 | Nav regions/agents, mesh baking, pathfinding |
 | Audio | 6 | Audio players, buses, effects |
-| AnimationTree | 8 | State machines, transitions, blend trees, parameters |
+| AnimationTree | 9 | State machines, transitions, blend trees, parameters |
 | Analysis | 4 | Scene complexity, signal flow, unused resources, project stats |
 
 Removed from upstream, deliberately: `execute_editor_script` and
@@ -56,7 +56,7 @@ Removed from upstream, deliberately: `execute_editor_script` and
 and Android categories. See [`SECURITY.md`](SECURITY.md).
 
 <details>
-<summary>Expand to see all 156 tool names</summary>
+<summary>Expand to see all 159 tool names</summary>
 
 **Project:** `get_project_info` · `get_filesystem_tree` · `search_files` · `get_project_settings` · `set_project_setting` · `uid_to_project_path` · `project_path_to_uid`
 
@@ -66,11 +66,11 @@ and Android categories. See [`SECURITY.md`](SECURITY.md).
 
 **Script:** `list_scripts` · `read_script` · `create_script` · `edit_script` · `attach_script` · `get_open_scripts` · `validate_script` · `search_in_files`
 
-**Editor:** `get_editor_errors` · `get_editor_screenshot` · `get_game_screenshot` · `clear_output` · `get_signals` · `reload_plugin` · `reload_project` · `get_output_log` · `get_editor_camera` · `set_editor_camera` · `compare_screenshots`
+**Editor:** `get_editor_errors` · `get_editor_screenshot` · `get_game_screenshot` · `clear_output` · `get_signals` · `reload_commands` · `reload_project` · `set_main_screen` · `get_output_log` · `get_editor_camera` · `set_editor_camera` · `compare_screenshots`
 
 **Input:** `simulate_key` · `simulate_mouse_click` · `simulate_mouse_move` · `simulate_action` · `simulate_sequence` · `get_input_actions` · `set_input_action`
 
-**Runtime:** `get_game_scene_tree` · `get_game_node_properties` · `set_game_node_property` · `capture_frames` · `monitor_properties` · `start_recording` · `stop_recording` · `replay_recording` · `find_nodes_by_script` · `get_autoload` · `batch_get_properties` · `find_ui_elements` · `click_button_by_text` · `wait_for_node` · `find_nearby_nodes` · `navigate_to` · `move_to` · `watch_signals`
+**Runtime:** `get_game_scene_tree` · `get_game_node_properties` · `set_game_node_property` · `capture_frames` · `monitor_properties` · `get_monitored_properties` · `start_recording` · `stop_recording` · `replay_recording` · `find_nodes_by_script` · `get_autoload` · `batch_get_properties` · `find_ui_elements` · `click_button_by_text` · `wait_for_node` · `find_nearby_nodes` · `navigate_to` · `move_to` · `watch_signals`
 
 **Animation:** `list_animations` · `create_animation` · `add_animation_track` · `set_animation_keyframe` · `get_animation_info` · `remove_animation`
 
@@ -94,7 +94,7 @@ and Android categories. See [`SECURITY.md`](SECURITY.md).
 
 **Audio:** `add_audio_player` · `add_audio_bus` · `add_audio_bus_effect` · `set_audio_bus` · `get_audio_bus_layout` · `get_audio_info`
 
-**AnimationTree:** `create_animation_tree` · `get_animation_tree_structure` · `set_tree_parameter` · `add_state_machine_state` · `remove_state_machine_state` · `add_state_machine_transition` · `remove_state_machine_transition` · `set_blend_tree_node`
+**AnimationTree:** `create_animation_tree` · `get_animation_tree_structure` · `set_tree_parameter` · `add_state_machine_state` · `remove_state_machine_state` · `add_state_machine_transition` · `remove_state_machine_transition` · `set_blend_tree_node` · `set_state_machine_root`
 
 **Analysis:** `analyze_scene_complexity` · `analyze_signal_flow` · `find_unused_resources` · `get_project_statistics`
 
@@ -109,7 +109,7 @@ godot-mcp/
 │   ├── plugin.cfg
 │   ├── websocket_client.gd        # WebSocket client + JSON-RPC dispatch
 │   ├── command_router.gd          # Command router; registers all handlers
-│   ├── commands/                  # 20 command modules (156 tool implementations)
+│   ├── commands/                  # 20 command modules (159 tool implementations)
 │   │   ├── base_commands.gd       # Base class: Undo, runtime IPC, screenshots, etc.
 │   │   ├── project_commands.gd
 │   │   ├── scene_commands.gd
@@ -145,7 +145,7 @@ godot-mcp/
 │   │   ├── index.ts               # MCP stdio entry
 │   │   ├── godot-bridge.ts        # WebSocket server + JSON-RPC
 │   │   ├── tools.ts               # Tool registration
-│   │   └── tool-manifest.ts       # 156 tool definitions (name / description / params)
+│   │   └── tool-manifest.ts       # 159 tool definitions (name / description / params)
 │   ├── scripts/
 │   │   ├── check-parity.mjs       # Manifest ↔ handler drift check
 │   │   └── check-invariants.mjs   # Security/robustness regression locks
@@ -306,7 +306,13 @@ It runs `gdparse` over `addons/`, the parity check, the security invariants,
 - **No parallel runtime calls**: the game-process IPC is a single fixed file per direction, so concurrent runtime or screenshot tool calls do not both succeed (simulated input is the exception: one file per batch)
 - **No request cancellation**: when a call times out on the server side, Godot keeps executing it
 - **Exports and Android deploys** are not exposed as tools; run them from the Godot CLI
-- **Cross-scene batch edits** (`cross_scene_set_property`): modifies scene instances in memory — save the affected scene files manually
+- **Cross-scene batch edits** (`cross_scene_set_property`): saves each changed scene file, but skips scenes open in the editor and refuses paths into resources kept in their own files
+- **Property paths** (`dye:tint`, `position:x`, `metadata/x`): array indexes (`items:0`) are not supported; an existing Dictionary entry or metadata value keeps its type; a new Dictionary key is stored as a StringName; undoing the creation of a key or metadata entry leaves it set to null
+- **Scripts without `@tool`**: in the editor, properties they build in `_get_property_list()` do not exist, so paths into them only work in the running game, and an editor save of such a resource drops those properties
+- **Write checks** compare floats and vectors approximately (about 1e-5), so a write smaller than that to a property that stays put still counts as taken
+- **Simulated input**: caps are in frames, not time, so in a game running at 30 fps a batch within the caps can outlast the 30 s wait (the caller gets an error while the events still play); up to about 17 `wait: false` batches can be queued; a stale batch created less than 5 s before a game started by hand, not through `play_scene`, is still applied
+- **Unsaved-scene tracking**: `set_physics_layers`, `set_navigation_layers`, `set_tree_parameter` and `setup_collision` with an unknown shape report success and mark the scene unsaved even when they changed nothing, so `reload_project` then asks for a save
+- **`attach_script`** reports success even when the script fails to parse
 - Some editor APIs may differ across Godot minor versions; **4.4+** is recommended
 
 ## License

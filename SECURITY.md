@@ -11,7 +11,7 @@ removes a guard is recognisable as a regression rather than a cleanup.
 
 ## What this thing is
 
-An MCP server that hands an AI agent 156 tools for driving the Godot 4 editor.
+An MCP server that hands an AI agent 159 tools for driving the Godot 4 editor.
 Two processes, two channels:
 
 ```
@@ -37,7 +37,7 @@ web page you have open from connecting to the port.
 A second connection cannot displace a healthy existing client. The upstream
 `this.client = ws` was last-write-wins, which meant anything that could complete
 a handshake could win the reconnect race and start returning **forged tool
-results to the agent** — a prompt-injection channel into a process holding 156
+results to the agent** — a prompt-injection channel into a process holding 159
 tools.
 
 **Not defended:** any local process that can open a socket without an `Origin`
@@ -143,7 +143,7 @@ the editor. `plugin.gd` has no `_process()` at all now.
 
 ### Tool surface is deliberately small
 
-156 tools, down from 173. Android, export, profiling and test modules are gone;
+159 tools, down from 173. Android, export, profiling and test modules are gone;
 removing `android_commands.gd` also removed the plugin's only `OS.execute` call
 site. Every tool is attack surface and maintenance burden. This is a starting
 cut, not a final one.
