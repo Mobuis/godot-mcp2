@@ -250,12 +250,14 @@ func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dicti
 	file.store_string(JSON.stringify({"id": request_id, "target": target}))
 	file.close()
 	if target == "editor":
-		var vp := editor_plugin.get_editor_interface().get_editor_main_screen().get_viewport()
-		if vp:
-			var img := vp.get_texture().get_image()
-			if img:
-				img.save_png(res_path)
-				return _screenshot_result(img, res_path, p)
+		var captured := _capture_editor_area(p)
+		if captured.has("error"):
+			return _err(str(captured["error"]))
+		if captured.has("image"):
+			var img: Image = captured["image"]
+			# The file on disk is the requested crop.
+			img.save_png(res_path)
+			return _screenshot_result(img, res_path, p, captured["extra"])
 	# Same real-time deadline as _runtime_call, for the same reason.
 	var deadline := Time.get_ticks_msec() + 5000
 	while Time.get_ticks_msec() < deadline:
@@ -270,8 +272,127 @@ func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dicti
 			var img := Image.load_from_file(res_path)
 			if img == null:
 				return _err("Screenshot file could not be read: %s" % res_path)
-			return _screenshot_result(img, res_path, p, {"meta": meta})
+			var extra := {"meta": meta}
+			if _has_region(p):
+				var cropped := _crop_to_region(img, p)
+				if cropped.has("error"):
+					return _err(str(cropped["error"]))
+				img = cropped["image"]
+				img.save_png(res_path)
+				extra["region"] = cropped["region"]
+			return _screenshot_result(img, res_path, p, extra)
 	return _err("Screenshot capture failed")
+
+
+const SCREENSHOT_AREAS := ["editor", "main_screen", "viewport_3d", "viewport_2d"]
+const REGION_KEYS := ["region_x", "region_y", "region_width", "region_height"]
+
+
+func _has_region(p: Dictionary) -> bool:
+	for key in REGION_KEYS:
+		if p.has(key):
+			return true
+	return false
+
+
+## Crops img to p's region_x/y/width/height, clamped to the image. x and y
+## default to 0, sizes to the far edge. Returns {"image", "region"} or {"error"}.
+func _crop_to_region(img: Image, p: Dictionary) -> Dictionary:
+	for key in REGION_KEYS:
+		if p.has(key) and not (typeof(p[key]) in [TYPE_INT, TYPE_FLOAT]):
+			return {"error": "%s must be a number of pixels" % key}
+	var iw := img.get_width()
+	var ih := img.get_height()
+	var wf := float(p.get("region_width", iw))
+	var hf := float(p.get("region_height", ih))
+	if not (wf > 0.0 and hf > 0.0):
+		return {"error": "region_width and region_height must be positive (got %s x %s)" % [wf, hf]}
+	# Clamped as floats first: Rect2i is 32-bit, so a huge value would wrap.
+	var x := int(clampf(float(p.get("region_x", 0)), -iw, iw))
+	var y := int(clampf(float(p.get("region_y", 0)), -ih, ih))
+	var w := int(minf(wf, 2.0 * iw))
+	var h := int(minf(hf, 2.0 * ih))
+	var rect := Rect2i(0, 0, iw, ih).intersection(Rect2i(x, y, w, h))
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		return {"error": "Region x=%s y=%s lies outside the %dx%d image" % [p.get("region_x", 0), p.get("region_y", 0), iw, ih]}
+	return {
+		"image": img.get_region(rect),
+		"region": {"x": rect.position.x, "y": rect.position.y, "width": rect.size.x, "height": rect.size.y},
+	}
+
+
+## True when vp is on screen. A hidden editor SubViewport keeps its last,
+## stale texture.
+func _viewport_is_shown(vp: Viewport) -> bool:
+	var node: Node = vp.get_parent()
+	while node != null:
+		if node is CanvasItem:
+			return (node as CanvasItem).is_visible_in_tree()
+		node = node.get_parent()
+	return false
+
+
+## Captures p["area"] and applies p's region. Returns {"image", "extra"},
+## {"error"}, or {} when the editor has no viewport, so the caller falls back.
+## Control rects are in canvas units, so "main_screen" scales its rect to pixels.
+func _capture_editor_area(p: Dictionary) -> Dictionary:
+	var area := str(p.get("area", "editor"))
+	if area not in SCREENSHOT_AREAS:
+		return {"error": "Unknown area '%s'. Expected one of: %s" % [area, ", ".join(SCREENSHOT_AREAS)]}
+	var ei := editor_plugin.get_editor_interface()
+	var img: Image = null
+	var extra := {"area": area}
+	if area in ["editor", "main_screen"]:
+		var screen := ei.get_editor_main_screen()
+		var root_vp := screen.get_viewport()
+		if root_vp == null:
+			return {}
+		img = root_vp.get_texture().get_image()
+		if img == null:
+			return {}
+		if area == "main_screen":
+			var canvas := root_vp.get_visible_rect().size
+			var sx := float(img.get_width()) / maxf(canvas.x, 1.0)
+			var sy := float(img.get_height()) / maxf(canvas.y, 1.0)
+			var r := screen.get_global_rect()
+			var crop := Rect2i(
+				Vector2i(roundi(r.position.x * sx), roundi(r.position.y * sy)),
+				Vector2i(roundi(r.size.x * sx), roundi(r.size.y * sy))
+			).intersection(Rect2i(0, 0, img.get_width(), img.get_height()))
+			if crop.size.x <= 0 or crop.size.y <= 0:
+				return {"error": "The editor main screen has no visible area to capture"}
+			img = img.get_region(crop)
+	else:
+		var index := int(p.get("viewport_index", 0))
+		var vp: SubViewport = null
+		if area == "viewport_3d":
+			if index < 0 or index > 3:
+				return {"error": "viewport_index must be 0-3, got %d" % index}
+			if ei.has_method("get_editor_viewport_3d"):
+				vp = ei.get_editor_viewport_3d(index)
+			extra["viewport_index"] = index
+		elif ei.has_method("get_editor_viewport_2d"):
+			vp = ei.get_editor_viewport_2d()
+		var screen_name := "3D" if area == "viewport_3d" else "2D"
+		if vp == null:
+			return {"error": "The editor's %s viewport is not available (%s)" % [screen_name, area]}
+		if not _viewport_is_shown(vp):
+			var hint := "Call set_main_screen with screen '%s' (and open a %s scene) first" % [screen_name, screen_name]
+			if area == "viewport_3d" and index > 0:
+				hint = "Viewport %d is only shown when the 3D view uses a split layout. %s" % [index, hint]
+			return {"error": "The %s viewport is not on screen, so its texture would be stale or blank. %s" % [screen_name, hint]}
+		img = vp.get_texture().get_image()
+		if img == null or img.is_empty():
+			return {"error": "The %s viewport has no image yet. Try again in a moment" % screen_name}
+	if _has_region(p):
+		extra["area_width"] = img.get_width()
+		extra["area_height"] = img.get_height()
+		var cropped := _crop_to_region(img, p)
+		if cropped.has("error"):
+			return cropped
+		img = cropped["image"]
+		extra["region"] = cropped["region"]
+	return {"image": img, "extra": extra}
 
 
 ## Marks the edited scene unsaved after a change made without UndoRedo.

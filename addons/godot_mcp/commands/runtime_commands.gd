@@ -47,6 +47,8 @@ func _capture_frames(p: Dictionary) -> Dictionary:
 	var frames: Array = []
 	for i in count:
 		var shot := await _request_screenshot("game", shot_params)
+		if shot.has("error"):
+			return _err("Frame %d: %s" % [i, shot["error"].get("message", "capture failed")])
 		var data: Variant = shot.get("result", shot)
 		# _request_screenshot always writes the same fixed user:// filename, so
 		# each frame overwrites the last. Copy it aside under a per-frame name —
