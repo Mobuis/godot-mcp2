@@ -68,10 +68,156 @@ func _save_scene(_params: Dictionary) -> Dictionary:
 	# on every call, and a log that is always red is a log nobody reads. Stepping
 	# to the next frame first leaves the flush and the dialog is allowed.
 	await editor_plugin.get_tree().process_frame
+	# A scene save also writes modified external resources without emitting
+	# signals, so they are found by fingerprinting their files before and after.
+	# The signals still report the scene; collection ends one frame after the save.
+	var written: Array = []
+	var on_resource := func(res: Resource) -> void:
+		if res != null:
+			_note_written(written, res.resource_path)
+	var on_scene := func(file_path: String) -> void:
+		_note_written(written, file_path)
+	var checked := _checkable_files(_external_resource_paths(root))
+	var before := _fingerprint_files(checked["files"])
+	editor_plugin.resource_saved.connect(on_resource)
+	editor_plugin.scene_saved.connect(on_scene)
 	var err := editor_plugin.get_editor_interface().save_scene()
+	if err == OK:
+		await editor_plugin.get_tree().process_frame
+	editor_plugin.resource_saved.disconnect(on_resource)
+	editor_plugin.scene_saved.disconnect(on_scene)
 	if err != OK:
 		return _err("Failed to save %s (error %d)" % [path, err])
-	return _ok({"scene_path": path, "saved": true})
+	# The save returned OK, so the scene was written even if its signal did not arrive.
+	if path not in written:
+		written.insert(0, path)
+	var after := _fingerprint_files(before.keys())
+	for file_path in after:
+		if after[file_path] != before[file_path]:
+			_note_written(written, file_path)
+	var result := {"scene_path": path, "saved": true, "files_written": written}
+	var notes: Array = []
+	var others := written.filter(func(f: String) -> bool: return f != path)
+	if not others.is_empty():
+		notes.append(
+			"Besides the scene, the editor also wrote %d external resource file(s) that were modified in memory: %s. "
+			% [others.size(), ", ".join(others)]
+			+ "This is standard editor behaviour when a scene is saved."
+		)
+	if not checked["unchecked"].is_empty():
+		notes.append(
+			"%d external resource file(s) were not checked for changes (limits: %d files, %d MB each, %d MB in total), so files_written may be incomplete: %s"
+			% [checked["unchecked"].size(), MAX_FINGERPRINT_FILES, MAX_FINGERPRINT_BYTES / 1048576, MAX_FINGERPRINT_TOTAL_BYTES / 1048576, ", ".join(checked["unchecked"])]
+		)
+	if not notes.is_empty():
+		result["note"] = " ".join(notes)
+	return _ok(result)
+
+
+## Records a saved file once, in save order. Sub-resources report paths like
+## `res://a.tscn::Mesh_1`; they belong to the scene file, so they are skipped.
+func _note_written(written: Array, file_path: String) -> void:
+	if file_path.is_empty() or "::" in file_path or file_path in written:
+		return
+	written.append(file_path)
+
+
+## Only formats the editor writes for in-memory resources. Imported assets (png,
+## glb, ogg...) are never rewritten by a scene save, and hashing them is costly.
+const SAVABLE_RESOURCE_EXTENSIONS := ["tres", "res", "material", "anim", "mesh", "theme"]
+## Bounds on the before/after hashing so a scene with many or huge resource files
+## cannot slow every save. Files past the bounds are reported as unchecked.
+const MAX_FINGERPRINT_FILES := 256
+const MAX_FINGERPRINT_BYTES := 32 * 1048576
+const MAX_FINGERPRINT_TOTAL_BYTES := 64 * 1048576
+const MAX_CONTAINER_DEPTH := 8
+
+
+## Splits paths into those worth fingerprinting and those left unchecked.
+func _checkable_files(paths: Array) -> Dictionary:
+	var files: Array = []
+	var unchecked: Array = []
+	var total := 0
+	for file_path in paths:
+		var size := 0
+		var f := FileAccess.open(file_path, FileAccess.READ)
+		if f != null:
+			size = f.get_length()
+			f.close()
+		if files.size() >= MAX_FINGERPRINT_FILES or size > MAX_FINGERPRINT_BYTES or total + size > MAX_FINGERPRINT_TOTAL_BYTES:
+			unchecked.append(file_path)
+		else:
+			files.append(file_path)
+			total += size
+	return {"files": files, "unchecked": unchecked}
+
+
+## Maps each file to its content hash, "" when missing. Not the modification time:
+## its one-second resolution would hide a second save within the same second.
+func _fingerprint_files(paths: Array) -> Dictionary:
+	var out := {}
+	for file_path in paths:
+		out[file_path] = FileAccess.get_sha256(file_path) if FileAccess.file_exists(file_path) else ""
+	return out
+
+
+## External resource files (`res://x.tres`, not built-in sub-resources, scripts or
+## imported assets) reachable from node's subtree through stored properties.
+func _external_resource_paths(node: Node) -> Array:
+	var paths: Array = []
+	var seen := {}
+	_walk_external_resources(node, seen, paths)
+	return paths
+
+
+func _is_savable_external(res_path: String) -> bool:
+	if not res_path.begins_with("res://") or "::" in res_path:
+		return false
+	if res_path.get_extension().to_lower() not in SAVABLE_RESOURCE_EXTENSIONS:
+		return false
+	# An import sidecar means the file is a source asset, not something the editor saves.
+	return not FileAccess.file_exists(res_path + ".import")
+
+
+func _walk_external_resources(obj: Object, seen: Dictionary, paths: Array) -> void:
+	if obj is Resource:
+		if seen.has(obj) or obj is Script:
+			return
+		seen[obj] = true
+		var res_path: String = (obj as Resource).resource_path
+		if _is_savable_external(res_path) and not res_path in paths:
+			paths.append(res_path)
+		# Listing the properties of a ShaderMaterial with no shader makes the
+		# engine log 'Parameter "shader" is null'; it holds no resources to find.
+		if obj is ShaderMaterial and (obj as ShaderMaterial).shader == null:
+			return
+	for prop in obj.get_property_list():
+		if int(prop["usage"]) & PROPERTY_USAGE_STORAGE == 0:
+			continue
+		# Only values that can hold a resource are read; get() on a mesh's or an
+		# image's packed arrays would copy them for nothing.
+		var type := int(prop["type"])
+		var variant := type == TYPE_NIL and int(prop["usage"]) & PROPERTY_USAGE_NIL_IS_VARIANT != 0
+		if type in [TYPE_OBJECT, TYPE_ARRAY, TYPE_DICTIONARY] or variant:
+			_walk_external_value(obj.get(str(prop["name"])), seen, paths, 0)
+	if obj is Node:
+		for child in (obj as Node).get_children():
+			_walk_external_resources(child, seen, paths)
+
+
+## Collects resource files from a property value. `depth` bounds Arrays and
+## Dictionaries, which can contain themselves.
+func _walk_external_value(value: Variant, seen: Dictionary, paths: Array, depth: int) -> void:
+	if value is Resource:
+		_walk_external_resources(value, seen, paths)
+	elif depth >= MAX_CONTAINER_DEPTH:
+		return
+	elif value is Array:
+		for item in value:
+			_walk_external_value(item, seen, paths, depth + 1)
+	elif value is Dictionary:
+		for key in value:
+			_walk_external_value(value[key], seen, paths, depth + 1)
 
 
 func _create_scene(params: Dictionary) -> Dictionary:
