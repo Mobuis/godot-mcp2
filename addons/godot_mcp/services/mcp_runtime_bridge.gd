@@ -2,7 +2,7 @@ extends Node
 ## Runtime bridge autoload — handles in-game MCP requests via user:// IPC.
 
 const NodeUtils = preload("res://addons/godot_mcp/utils/node_utils.gd")
-const TypeParser = preload("res://addons/godot_mcp/utils/type_parser.gd")
+const PropertyAccess = preload("res://addons/godot_mcp/utils/property_access.gd")
 
 const REQUEST_FILE := "mcp_runtime_req.json"
 const RESPONSE_FILE := "mcp_runtime_res.json"
@@ -11,6 +11,12 @@ var _recording: Array = []
 var _is_recording := false
 var _record_started_ms := 0
 var _handling := false
+## A handler that hits a script error never returns, so _handling would stay set
+## and every later request would time out. Past this time the next request is
+## served anyway; the generation stops the stuck handler from clearing the flag.
+var _handling_until_msec := 0
+var _handling_generation := 0
+const DEFAULT_REQUEST_TIMEOUT_MS := 5000
 
 ## key -> {node_path, property, started_ms, samples:[{t, value}], max_samples}
 var _monitors: Dictionary = {}
@@ -63,28 +69,32 @@ func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	_sample_monitors()
-	if _handling:
+	if _handling and Time.get_ticks_msec() < _handling_until_msec:
 		return
 	var path := _user_path(REQUEST_FILE)
 	if not FileAccess.file_exists(path):
 		return
 	_handling = true
+	_handling_generation += 1
 	var text := FileAccess.get_file_as_string(path)
 	DirAccess.remove_absolute(path)
 	var json := JSON.new()
-	if json.parse(text) != OK:
+	if json.parse(text) != OK or not (json.data is Dictionary):
 		_write_response({"error": "bad request json"})
 		_handling = false
 		return
-	_handle_request(json.data)
+	var timeout_ms := int(json.data.get("timeout_ms", DEFAULT_REQUEST_TIMEOUT_MS))
+	_handling_until_msec = Time.get_ticks_msec() + clampi(timeout_ms, 0, 60000) + 1000
+	_handle_request(json.data, _handling_generation)
 
 
-func _handle_request(req: Dictionary) -> void:
+func _handle_request(req: Dictionary, generation: int) -> void:
 	var result: Dictionary = await _dispatch_async(req)
 	# T-206: echo the caller's id so it can tell its own response from another's.
 	result["id"] = str(req.get("id", ""))
 	_write_response(result)
-	_handling = false
+	if generation == _handling_generation:
+		_handling = false
 
 
 func _dispatch_async(req: Dictionary) -> Dictionary:
@@ -105,22 +115,32 @@ func _dispatch_async(req: Dictionary) -> Dictionary:
 			var node := _resolve_node(params.get("node_path", ""))
 			if node == null:
 				return {"error": "node not found"}
-			var prop: String = params.get("property", "")
-			if not (prop in node):
-				return {"error": "%s has no property '%s'" % [node.get_class(), prop]}
-			var wanted: Variant = _parse(params.get("value", ""))
-			node.set(prop, wanted)
-			# Object.set() is silent: a type mismatch or an unknown property leaves
-			# the value untouched and reports nothing, so this used to answer
-			# {"ok": true} whether or not anything had changed. navigate_to writing
-			# a Vector2 into a Vector3 target_position is exactly that case.
-			var actual: Variant = node.get(prop)
-			if typeof(actual) != typeof(wanted):
+			var prop := str(params.get("property", ""))
+			if PropertyAccess.touches_script(prop):
 				return {"error": (
-					"%s.%s is %s; the value given parsed as %s, so the write was ignored"
-					% [node.get_class(), prop, type_string(typeof(actual)), type_string(typeof(wanted))]
-				)}
-			return {"result": {"ok": true, "property": prop, "value": str(actual)}}
+					"Refusing to set '%s' in the running game: assigning a script runs its code. "
+					+ "Attach scripts in the editor with attach_script."
+				) % prop}
+			var info := PropertyAccess.describe(node, prop)
+			if info.has("error"):
+				return {"error": info["error"]}
+			# Parsed against the declared type, so a Vector2 for a Vector3 is refused.
+			var parsed := PropertyAccess.parse(info, str(params.get("value", "")))
+			if parsed.has("error"):
+				return {"error": "%s.%s: %s" % [node.get_class(), prop, parsed["error"]]}
+			var wanted: Variant = parsed["value"]
+			var path := NodePath(prop)
+			var before: Variant = node.get_indexed(path)
+			node.set_indexed(path, wanted)
+			# Object.set() fails silently, so judge the write by the value read back.
+			var actual: Variant = node.get_indexed(path)
+			var check := PropertyAccess.verify(before, wanted, actual)
+			if check.has("error"):
+				return {"error": "%s.%s: %s" % [node.get_class(), prop, check["error"]]}
+			var result := {"ok": true, "property": prop, "value": str(actual)}
+			if check.has("note"):
+				result["note"] = check["note"]
+			return {"result": result}
 		"find_by_script":
 			var results: Array = []
 			var search_root := _search_root()
@@ -295,10 +315,6 @@ func _props(node: Node, keys: Array = []) -> Dictionary:
 		for k in keys:
 			out[str(k)] = str(node.get(str(k)))
 	return out
-
-
-func _parse(text: String) -> Variant:
-	return TypeParser.parse(text)
 
 
 func _collect_ui(node: Node, results: Array) -> void:

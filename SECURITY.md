@@ -95,6 +95,31 @@ on fixed `user://` IPC filenames.
 **Not defended:** symlinks inside the project pointing out of it. The check is
 prefix-based on the globalized path.
 
+### Property values cannot load or run code from outside the project
+
+Property tools (`update_property`, `set_game_node_property`, `edit_resource`,
+the batch tools) parse values against the property's declared type in
+`utils/property_access.gd`. Three rules keep that from widening the surface:
+
+- A resource value is a `res://` path, a `uid://` id or `new:<ClassName>`.
+  Paths go through `normalize_res()`, and any other scheme (`user://`, `file://`)
+  is refused, because `ResourceLoader.load()` accepts absolute and `user://`
+  paths too.
+- `new:<ClassName>` creates only `Resource` types, engine or script classes.
+  Anything else in `ClassDB` could otherwise be instantiated by name.
+- Built-in types are never parsed with `str_to_var()` unless the text names that
+  exact type and contains no `Object(`/`Resource(`: `str_to_var()` instantiates
+  objects and loads resources. Arrays and dictionaries are parsed as JSON.
+
+Every property tool, in the editor and in the running game, refuses a path with
+a `script` segment. Assigning a script runs its code, which is the path D-1
+closed by deleting `execute_game_script`. The editor attaches scripts only
+through `attach_script`, where the client's permission layer sees it. A
+`resource_path` segment is refused too: rewriting it makes the editor save the
+resource over another file.
+
+INV-305 and INV-306 lock these.
+
 ### Confirmation dialogs are not suppressed
 
 `set_auto_dismiss` is gone. It walked the entire editor control tree every frame

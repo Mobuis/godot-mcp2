@@ -5,6 +5,7 @@ class_name MCPBaseCommands
 const NodeUtils = preload("res://addons/godot_mcp/utils/node_utils.gd")
 const ResourceUtils = preload("res://addons/godot_mcp/utils/resource_utils.gd")
 const TypeParser = preload("res://addons/godot_mcp/utils/type_parser.gd")
+const PropertyAccess = preload("res://addons/godot_mcp/utils/property_access.gd")
 
 var editor_plugin: EditorPlugin
 
@@ -210,7 +211,7 @@ func _runtime_call(action: String, params: Dictionary = {}, timeout_sec: float =
 	var file := FileAccess.open(req_path, FileAccess.WRITE)
 	if file == null:
 		return _err("Failed to write runtime request file", -32012)
-	file.store_string(JSON.stringify({"id": request_id, "action": action, "params": params}))
+	file.store_string(JSON.stringify({"id": request_id, "action": action, "params": params, "timeout_ms": int(timeout_sec * 1000.0)}))
 	file.close()
 	# Measure real time, not iterations. `elapsed += 0.05` assumed each poll took
 	# exactly its nominal 50ms, but the editor throttles its frame rate when idle
@@ -306,11 +307,56 @@ func _request_screenshot(target: String = "editor", p: Dictionary = {}) -> Dicti
 
 
 func _undo_property(node: Object, property: String, new_value: Variant) -> void:
-	var old_value = node.get(property)
-	editor_plugin.get_undo_redo().create_action("MCP Set %s" % property)
-	editor_plugin.get_undo_redo().add_do_property(node, property, new_value)
-	editor_plugin.get_undo_redo().add_undo_property(node, property, old_value)
-	editor_plugin.get_undo_redo().commit_action()
+	var undo_redo := editor_plugin.get_undo_redo()
+	undo_redo.create_action("MCP Set %s" % property)
+	if ":" in property:
+		# add_do_property() takes a plain name; a path needs set_indexed().
+		var path := NodePath(property)
+		undo_redo.add_do_method(node, "set_indexed", path, new_value)
+		undo_redo.add_undo_method(node, "set_indexed", path, node.get_indexed(path))
+	else:
+		undo_redo.add_do_property(node, property, new_value)
+		undo_redo.add_undo_property(node, property, node.get(property))
+	undo_redo.commit_action()
+
+
+## Parses value_text for the property, writes it and checks the value read back
+## (see MCPPropertyAccess). Returns {"value"} plus an optional "note", or {"error"}.
+## use_undo is false for objects outside the scene's undo history. refuse_external
+## is for callers that save a single file: a write into another file would stay
+## in memory only.
+func _set_property_typed(target: Object, property: String, value_text: String, use_undo: bool = true, refuse_external: bool = false) -> Dictionary:
+	var info := PropertyAccess.describe(target, property)
+	if info.has("error"):
+		return info
+	if refuse_external:
+		var external := PropertyAccess.external_file(info, target)
+		if not external.is_empty():
+			return {"error": "%s: this writes into %s, which is saved in its own file. Edit that file with edit_resource instead." % [property, external]}
+	var parsed := PropertyAccess.parse(info, value_text)
+	if parsed.has("error"):
+		return {"error": "%s: %s" % [property, parsed["error"]]}
+	var wanted: Variant = parsed["value"]
+	var path := NodePath(property)
+	var before: Variant = target.get_indexed(path)
+	if use_undo:
+		_undo_property(target, property, wanted)
+	else:
+		target.set_indexed(path, wanted)
+	var after: Variant = target.get_indexed(path)
+	var check := PropertyAccess.verify(before, wanted, after)
+	if check.has("error"):
+		return {"error": "%s: %s" % [property, check["error"]]}
+	var out := {"value": after}
+	var notes: Array = []
+	if check.has("note"):
+		notes.append(check["note"])
+	var shared := PropertyAccess.shared_resource_note(info, target)
+	if not shared.is_empty():
+		notes.append(shared)
+	if not notes.is_empty():
+		out["note"] = " ".join(notes)
+	return out
 
 
 func _parse_value(text: String) -> Variant:

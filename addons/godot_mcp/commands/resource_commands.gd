@@ -30,10 +30,33 @@ func _edit_resource(p: Dictionary) -> Dictionary:
 	var res: Resource = load(path)
 	if res == null:
 		return _err("Resource not found")
-	for key in p.get("properties", {}):
-		res.set(str(key), _parse_value(str(p["properties"][key])))
-	ResourceSaver.save(res, path)
-	return _ok({"updated": path})
+	var properties: Dictionary = p.get("properties", {})
+	# Rehearse the writes in order on a copy, so a bad value leaves the shared
+	# resource untouched and `mesh` can be created before `mesh:size`. The copy
+	# still shares sub-resources that have their own file, hence refuse_external.
+	var rehearsal: Resource = res.duplicate(true)
+	if rehearsal == null:
+		return _err("Could not copy %s to check the values first" % path)
+	for key in properties:
+		var tried := _set_property_typed(rehearsal, str(key), str(properties[key]), false, true)
+		if tried.has("error"):
+			return _err(tried["error"])
+	var values := {}
+	var notes: Array = []
+	for key in properties:
+		var written := _set_property_typed(res, str(key), str(properties[key]), false, true)
+		if written.has("error"):
+			return _err(written["error"])
+		values[str(key)] = _serialize_value(written["value"])
+		if written.has("note"):
+			notes.append(written["note"])
+	var err := ResourceSaver.save(res, path)
+	if err != OK:
+		return _err("Could not save %s: %s" % [path, error_string(err)])
+	var result := {"updated": path, "values": values}
+	if not notes.is_empty():
+		result["note"] = " ".join(notes)
+	return _ok(result)
 
 
 func _create_resource(p: Dictionary) -> Dictionary:

@@ -47,16 +47,36 @@ func _collect_signals(node: Node, out: Array) -> void:
 func _batch_set_property(p: Dictionary) -> Dictionary:
 	var type_name: String = p.get("type", "")
 	var property: String = p.get("property", "")
-	var value = _parse_value(str(p.get("value", "")))
+	var value_text := str(p.get("value", ""))
+	var refusal := PropertyAccess.refused(property)
+	if not refusal.is_empty():
+		return _err(refusal)
 	var results: Array = []
 	NodeUtils.collect_by_type(_edited_root(), type_name, results)
 	var count := 0
+	var skipped := 0
+	var failed: Array = []
+	var notes: Array = []
 	for item in results:
 		var node := _resolve_node(item["path"])
-		if node:
-			_undo_property(node, property, value)
+		if node == null:
+			continue
+		# A property added by a script exists on some nodes of the type only.
+		if PropertyAccess.describe(node, property).has("error"):
+			skipped += 1
+			continue
+		# Parsed per node: scripts can declare the property with different types.
+		var written := _set_property_typed(node, property, value_text)
+		if written.has("error"):
+			failed.append({"path": _scene_path(node), "error": written["error"]})
+		else:
 			count += 1
-	return _ok({"updated": count})
+			if written.has("note") and not written["note"] in notes:
+				notes.append(written["note"])
+	var result := {"updated": count, "skipped_without_property": skipped, "failed": failed}
+	if not notes.is_empty():
+		result["note"] = " ".join(notes)
+	return _ok(result)
 
 
 func _find_node_references(p: Dictionary) -> Dictionary:
@@ -100,12 +120,24 @@ func _get_scene_dependencies(p: Dictionary) -> Dictionary:
 	return _ok({"scene": scene_path, "dependencies": deps})
 
 
+## Sets the property in each scene file of the directory and saves the
+## scenes that changed. Open scenes are skipped: the editor would overwrite the
+## file with its own copy on the next save.
 func _cross_scene_set_property(p: Dictionary) -> Dictionary:
 	var directory := _norm_res(p.get("directory", "res://"))
+	if directory.is_empty():
+		return _err(_path_error(p, "directory"))
 	var property: String = p.get("property", "")
 	var value_text: String = str(p.get("value", ""))
 	var type_name: String = p.get("type", "")
+	var refusal := PropertyAccess.refused(property)
+	if not refusal.is_empty():
+		return _err(refusal)
 	var updated: Array = []
+	var failed: Array = []
+	var skipped_open: Array = []
+	var stats := {"skipped_without_property": 0, "unchanged": 0}
+	var open_scenes := editor_plugin.get_editor_interface().get_open_scenes()
 	var dir := DirAccess.open(directory)
 	if dir == null:
 		return _err("Invalid directory")
@@ -114,23 +146,65 @@ func _cross_scene_set_property(p: Dictionary) -> Dictionary:
 	while f != "":
 		if f.ends_with(".tscn"):
 			var path := directory.path_join(f)
-			var packed: PackedScene = load(path)
-			if packed:
-				var inst := packed.instantiate()
-				_set_on_matching(inst, type_name, property, value_text, updated, path)
-				inst.free()
+			if path in open_scenes:
+				skipped_open.append(path)
+			else:
+				_set_in_scene_file(path, type_name, property, value_text, updated, failed, stats)
 		f = dir.get_next()
 	dir.list_dir_end()
-	return _ok({"updated_scenes": updated})
+	var result := {"updated_scenes": updated, "failed": failed}
+	result.merge(stats)
+	if not skipped_open.is_empty():
+		result["skipped_open_scenes"] = skipped_open
+		result["note"] = "Scenes open in the editor were not changed; use batch_set_property on them."
+	return _ok(result)
 
 
-func _set_on_matching(node: Node, type_name: String, property: String, value_text: String, updated: Array, scene_path: String) -> void:
-	if node.get_class() == type_name or node.is_class(type_name):
-		node.set(property, _parse_value(value_text))
-		if scene_path not in updated:
-			updated.append(scene_path)
+func _set_in_scene_file(path: String, type_name: String, property: String, value_text: String, updated: Array, failed: Array, stats: Dictionary) -> void:
+	var packed: PackedScene = load(path)
+	if packed == null:
+		failed.append({"scene": path, "error": "Could not load the scene"})
+		return
+	# Edit state keeps sub-scenes as instances, so pack() writes what the editor would.
+	var inst := packed.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
+	var errors: Array = []
+	var changed := _set_on_matching(inst, inst, type_name, property, value_text, errors, stats)
+	for e in errors:
+		failed.append({"scene": path, "node": e["node"], "error": e["error"]})
+	if changed > 0:
+		var err := packed.pack(inst)
+		if err == OK:
+			err = ResourceSaver.save(packed, path)
+		if err == OK:
+			editor_plugin.get_editor_interface().get_resource_filesystem().update_file(path)
+			updated.append(path)
+		else:
+			failed.append({"scene": path, "error": "Could not save: %s" % error_string(err)})
+	inst.free()
+
+
+## Returns how many nodes changed. Only nodes the scene owns are edited: the
+## inside of an instanced sub-scene belongs to its own file.
+func _set_on_matching(node: Node, scene_root: Node, type_name: String, property: String, value_text: String, errors: Array, stats: Dictionary) -> int:
+	var changed := 0
+	var owned := node == scene_root or node.owner == scene_root
+	if owned and (node.get_class() == type_name or node.is_class(type_name)):
+		# As in batch_set_property, nodes without the property are skipped.
+		if PropertyAccess.describe(node, property).has("error"):
+			stats["skipped_without_property"] += 1
+		else:
+			var before: Variant = node.get_indexed(NodePath(property))
+			var written := _set_property_typed(node, property, value_text, false, true)
+			if written.has("error"):
+				errors.append({"node": str(scene_root.get_path_to(node)), "error": written["error"]})
+			elif PropertyAccess.same(before, written["value"]):
+				# Re-saving an unchanged scene only reformats the file.
+				stats["unchanged"] += 1
+			else:
+				changed += 1
 	for child in node.get_children():
-		_set_on_matching(child, type_name, property, value_text, updated, scene_path)
+		changed += _set_on_matching(child, scene_root, type_name, property, value_text, errors, stats)
+	return changed
 
 
 func _find_script_references(p: Dictionary) -> Dictionary:
@@ -178,9 +252,15 @@ func _batch_add_nodes(p: Dictionary) -> Dictionary:
 		editor_plugin.get_undo_redo().add_do_method(node, "set_owner", root)
 		editor_plugin.get_undo_redo().add_undo_method(parent, "remove_child", node)
 		editor_plugin.get_undo_redo().commit_action()
+		var created_entry := {"index": i, "path": _scene_path(node), "type": node_type}
+		var property_errors: Array = []
 		for key in entry.get("properties", {}):
-			node.set(str(key), _parse_value(str(entry["properties"][key])))
-		created.append({"index": i, "path": _scene_path(node), "type": node_type})
+			var written := _set_property_typed(node, str(key), str(entry["properties"][key]), false)
+			if written.has("error"):
+				property_errors.append(written["error"])
+		if not property_errors.is_empty():
+			created_entry["property_errors"] = property_errors
+		created.append(created_entry)
 	return _ok({"created": created, "count": created.size(), "errors": errors})
 
 

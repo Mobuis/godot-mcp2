@@ -49,14 +49,20 @@ func _add_node(params: Dictionary) -> Dictionary:
 	editor_plugin.get_undo_redo().add_undo_method(parent, "remove_child", node)
 	editor_plugin.get_undo_redo().commit_action()
 
+	var property_errors: Array = []
 	for key in properties:
-		node.set(key, TypeParser.parse(str(properties[key])))
+		var written := _set_property_typed(node, str(key), str(properties[key]), false)
+		if written.has("error"):
+			property_errors.append(written["error"])
 
-	return _ok({
+	var result := {
 		"path": _scene_path(node),
 		"type": node_type,
 		"name": node.name,
-	})
+	}
+	if not property_errors.is_empty():
+		result["property_errors"] = property_errors
+	return _ok(result)
 
 
 func _delete_node(params: Dictionary) -> Dictionary:
@@ -146,18 +152,18 @@ func _update_property(params: Dictionary) -> Dictionary:
 	if property.is_empty():
 		return _err("Missing 'property'")
 
-	var parsed := TypeParser.parse(value_text)
-	var old_value = node.get(property)
-	editor_plugin.get_undo_redo().create_action("MCP Update Property")
-	editor_plugin.get_undo_redo().add_do_property(node, property, parsed)
-	editor_plugin.get_undo_redo().add_undo_property(node, property, old_value)
-	editor_plugin.get_undo_redo().commit_action()
-
-	return _ok({
+	# Report the value the node holds, not the one requested.
+	var written := _set_property_typed(node, property, value_text)
+	if written.has("error"):
+		return _err(written["error"])
+	var result := {
 		"node_path": _scene_path(node),
 		"property": property,
-		"value": _serialize_value(parsed),
-	})
+		"value": _serialize_value(written["value"]),
+	}
+	if written.has("note"):
+		result["note"] = written["note"]
+	return _ok(result)
 
 
 func _get_node_properties(params: Dictionary) -> Dictionary:

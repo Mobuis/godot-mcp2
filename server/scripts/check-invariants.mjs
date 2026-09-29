@@ -313,6 +313,49 @@ const INVARIANTS = [
     },
   },
   {
+    id: "INV-305",
+    task: "property-tools",
+    desc: "resource values load only project paths and create only Resource types",
+    check() {
+      const src = read("addons/godot_mcp/utils/property_access.gd");
+      if (src === null) return "property_access.gd not found";
+      // ResourceLoader.load() also accepts user:// and absolute paths.
+      if (!/ResourceUtils\.normalize_res\(/.test(src)) {
+        return "resource paths are loaded without normalize_res() — user:// and absolute paths escape the project";
+      }
+      if (!/is_parent_class\(class_id, "Resource"\)/.test(src)) {
+        return "new:<ClassName> is not restricted to Resource types — any ClassDB class could be instantiated";
+      }
+      // str_to_var() can instantiate Objects and load Resources, so it may only
+      // see text rebuilt from validated numbers.
+      if (/str_to_var\(/.test(src) && !/_number_list\(/.test(src)) {
+        return "str_to_var() is fed caller text instead of a type name and validated numbers";
+      }
+      return true;
+    },
+  },
+  {
+    id: "INV-306",
+    task: "property-tools",
+    desc: "no property tool can assign a script, in the editor or the running game",
+    check() {
+      const access = read("addons/godot_mcp/utils/property_access.gd");
+      const bridge = read("addons/godot_mcp/services/mcp_runtime_bridge.gd");
+      if (access === null) return "property_access.gd not found";
+      // Assigning a script runs its code, like the removed execute_game_script.
+      if (!/const REFUSED := \{[^}]*"script":/.test(access)) {
+        return "property_access.gd REFUSED no longer lists `script`";
+      }
+      if (!/var refusal := refused\(property\)/.test(access)) {
+        return "describe() no longer checks refused(), so property tools can write `script`";
+      }
+      if (bridge !== null && !/PropertyAccess\.touches_script\(/.test(bridge)) {
+        return "set_node_property does not refuse the `script` property";
+      }
+      return true;
+    },
+  },
+  {
     id: "INV-501",
     task: "T-506",
     desc: "commit.bat (blanket `git add .` + fixed message) is removed",

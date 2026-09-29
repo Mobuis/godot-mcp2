@@ -137,6 +137,7 @@ godot-mcp/
 │   │   └── mcp_screenshot_bridge.gd
 │   └── utils/
 │       ├── type_parser.gd         # Vector2 / Color type parsing
+│       ├── property_access.gd     # Typed property writes, `a:b` paths, resource values
 │       ├── node_utils.gd
 │       └── resource_utils.gd
 ├── server/                        # Node.js MCP server
