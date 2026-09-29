@@ -199,9 +199,11 @@ func _dispatch_async(req: Dictionary) -> Dictionary:
 		"replay_input":
 			var events: Array = params.get("events", [])
 			var replayed := _replay_events(events)
-			if replayed < 0:
+			if replayed == -1:
 				return {"error": "MCPInputBridge autoload is not present; cannot replay input"}
-			return {"result": {"replayed": replayed, "requested": events.size()}}
+			if replayed == -2:
+				return {"error": "The game has too many input batches waiting; try again once they are applied"}
+			return {"result": {"replayed": replayed, "requested": events.size(), "note": "Queued; the events play back over the recorded duration."}}
 		"watch_signals":
 			return await _watch_signals(params)
 		"find_nearby":
@@ -348,15 +350,23 @@ func _find_button(node: Node, text: String) -> BaseButton:
 ## Returns the number of events dispatched, or -1 if the input bridge is missing.
 func _replay_events(events: Array) -> int:
 	var bridge := get_node_or_null("/root/MCPInputBridge")
-	if bridge == null or not bridge.has_method("apply_event"):
+	if bridge == null or not bridge.has_method("enqueue"):
 		return -1
-	var count := 0
+	# Replayed through the sequencer with the recorded gaps: applied in one frame,
+	# a press and its release are invisible to a game that polls input.
+	var timed: Array = []
+	var previous_t := -1.0
 	for ev in events:
-		if ev is Dictionary:
-			bridge.apply_event(ev)
-			count += 1
-	Input.flush_buffered_events()
-	return count
+		if not ev is Dictionary:
+			continue
+		var entry: Dictionary = ev.duplicate()
+		var t := float(ev.get("t", previous_t if previous_t >= 0.0 else 0.0))
+		if previous_t >= 0.0 and is_finite(t):
+			entry["delay_ms"] = maxf(t - previous_t, 0.0)
+		previous_t = t
+		timed.append(entry)
+	var accepted: int = bridge.enqueue(timed)
+	return accepted if accepted >= 0 else -2
 
 
 ## Records real input while `start_recording` is active.

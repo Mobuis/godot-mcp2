@@ -356,6 +356,41 @@ const INVARIANTS = [
     },
   },
   {
+    id: "INV-307",
+    task: "input-waits",
+    desc: "waiting input/reload tools are capped and stay under the server timeout",
+    check() {
+      const bridge = read("addons/godot_mcp/services/mcp_input_bridge.gd");
+      const cmds = read(`${CMD_DIR}/input_commands.gd`);
+      const editor = read(`${CMD_DIR}/editor_commands.gd`);
+      if (bridge === null || cmds === null || editor === null) return null;
+      for (const c of ["MAX_EVENTS", "MAX_FRAMES", "MAX_DELAY_MS", "MAX_TOTAL_DELAY_MS", "MAX_TOTAL_FRAMES"]) {
+        if (!new RegExp(`const ${c} :=`).test(bridge)) return `mcp_input_bridge.gd lost the ${c} cap`;
+        if (!new RegExp(`InputBridge\\.${c}`).test(cmds)) return `input_commands.gd does not enforce ${c}`;
+      }
+      // The wait deadlines must be real-time and below the server's 45 s default.
+      for (const [src, name, re] of [
+        [cmds, "input_commands.gd ACK_DEADLINE_SEC", /const ACK_DEADLINE_SEC := (\d+(?:\.\d+)?)/],
+        [editor, "editor_commands.gd RELOAD_DEADLINE_SEC", /const RELOAD_DEADLINE_SEC := (\d+(?:\.\d+)?)/],
+      ]) {
+        const m = src.match(re);
+        if (!m) return `${name} not found`;
+        if (Number(m[1]) >= 45) return `${name} is ${m[1]} s, not below the server's 45 s timeout`;
+      }
+      if (!/is_playing_scene\(\)/.test(cmds)) return "simulate_* no longer refuse to queue when the game is not running";
+      if (!/_is_safe_id\(/.test(bridge)) return "the input ack/batch file names are built from an unchecked id";
+      if (!/const MAX_PENDING_BATCHES :=/.test(bridge) || !/MAX_PENDING_BATCHES/.test(cmds)) {
+        return "the number of pending input batches is no longer limited";
+      }
+      // One file per batch, published by rename: a shared read-modify-write
+      // queue file loses or duplicates batches.
+      if (!/rename_absolute\(/.test(cmds)) return "input batches are not published atomically (temp file + rename)";
+      if (/mcp_input_queue\.json/.test(bridge) || /mcp_input_queue\.json/.test(cmds)) return "a shared input queue file is back";
+      if (!/is_finite\(/.test(cmds) || !/is_finite\(/.test(bridge)) return "input caps are checked without rejecting non-finite/huge numbers first";
+      return true;
+    },
+  },
+  {
     id: "INV-501",
     task: "T-506",
     desc: "commit.bat (blanket `git add .` + fixed message) is removed",

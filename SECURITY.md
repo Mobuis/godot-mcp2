@@ -120,6 +120,20 @@ resource over another file.
 
 INV-305 and INV-306 lock these.
 
+### Waiting tools are capped
+
+`simulate_*` and `reload_project` wait for their effect. A server-side timeout
+does not cancel work in Godot, so every wait has a cap: per-event and total
+delays and frames in `mcp_input_bridge.gd`, checked before anything is queued,
+and real-time deadlines below the server's 45 s timeout. The input ack file name
+is built only from an id the bridge has validated. INV-307 locks this.
+
+The caps bound one call, not the queue. Up to about 17 batches can be accepted
+(8 on disk, 8 read by the game, 1 running), so `wait: false` calls can keep a
+game busy for a few minutes; `stop_scene` ends it. A frame cap is not a time
+cap either: at 30 fps a batch within the caps can outlast the 30 s wait, and
+the caller then gets an error while the events still play.
+
 ### Confirmation dialogs are not suppressed
 
 `set_auto_dismiss` is gone. It walked the entire editor control tree every frame
@@ -146,7 +160,9 @@ for their absence as a problem.
   failure mode is a clean timeout rather than silently returning another call's
   data — but two concurrent runtime calls still cannot both succeed. The real fix
   is to give the game process its own WebSocket client (T-401 in the hardening
-  plan); it is a design change and has not been done.
+  plan); it is a design change and has not been done. Simulated input is the
+  exception: it uses one file per batch, written under a temporary name and
+  renamed into place, so input calls no longer overwrite each other.
 - **No request cancellation.** When a call times out server-side, Godot keeps
   executing it. The result is discarded on arrival.
 - **No authentication on the WebSocket.** See above.

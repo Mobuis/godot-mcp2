@@ -303,7 +303,7 @@ It runs `gdparse` over `addons/`, the parity check, the security invariants,
 ## Known limitations
 
 - **Runtime tools**: call `play_scene` first; the game process must load the `MCPRuntimeBridge` autoload; `watch_signals` listens for signal emissions on specified nodes while the game is running
-- **No parallel runtime calls**: the game-process IPC is a single fixed file per direction, so concurrent runtime or screenshot tool calls do not both succeed
+- **No parallel runtime calls**: the game-process IPC is a single fixed file per direction, so concurrent runtime or screenshot tool calls do not both succeed (simulated input is the exception: one file per batch)
 - **No request cancellation**: when a call times out on the server side, Godot keeps executing it
 - **Exports and Android deploys** are not exposed as tools; run them from the Godot CLI
 - **Cross-scene batch edits** (`cross_scene_set_property`): modifies scene instances in memory — save the affected scene files manually

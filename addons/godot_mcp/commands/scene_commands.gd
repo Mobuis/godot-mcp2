@@ -1,6 +1,8 @@
 @tool
 extends "res://addons/godot_mcp/commands/base_commands.gd"
 
+const InputBridge = preload("res://addons/godot_mcp/services/mcp_input_bridge.gd")
+
 
 func get_commands() -> Dictionary:
 	return {
@@ -117,15 +119,24 @@ func _create_scene(params: Dictionary) -> Dictionary:
 
 func _play_scene(params: Dictionary) -> Dictionary:
 	var mode: String = params.get("mode", "current")
+	var scene_path := ""
+	if mode != "main" and mode != "current":
+		scene_path = _norm_res(params.get("scene_path", ""))
+		if scene_path.is_empty():
+			return _err("Custom play mode: %s" % _path_error(params, "scene_path"))
+	# Drop input batches and acks that an earlier run left in user://, so
+	# they are not replayed into the new game.
+	var user_dir := DirAccess.open(OS.get_user_data_dir())
+	if user_dir != null:
+		for f in user_dir.get_files():
+			if f.begins_with(InputBridge.BATCH_PREFIX) or f.begins_with(InputBridge.TMP_PREFIX) or f.begins_with(InputBridge.ACK_PREFIX):
+				DirAccess.remove_absolute(OS.get_user_data_dir().path_join(f))
 	match mode:
 		"main":
 			editor_plugin.get_editor_interface().play_main_scene()
 		"current":
 			editor_plugin.get_editor_interface().play_current_scene()
 		_:
-			var scene_path := _norm_res(params.get("scene_path", ""))
-			if scene_path.is_empty():
-				return _err("Custom play mode: %s" % _path_error(params, "scene_path"))
 			editor_plugin.get_editor_interface().play_custom_scene(scene_path)
 	return _ok({"playing": true, "mode": mode})
 
